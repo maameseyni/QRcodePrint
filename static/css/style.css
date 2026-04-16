@@ -1,0 +1,470 @@
+/* Styles personnalisés pour l'application QR Code */
+
+:root {
+    --primary-color: #1a2745;
+    --primary-dark: #141d32;
+    --primary-light: #1a2745;
+    --secondary-color: #6c757d;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #1a2745;
+    --light-color: #f8f9fa;
+    --dark-color: #212529;
+    --bg-light: #ffffff;
+    --bg-gray: #f8f9fa;
+    --border-color: #e9ecef;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+body {
+    background: #ffffff;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #212529;
+}
+
+/* Navigation */
+.navbar {
+    box-shadow: var(--shadow-sm);
+    min-height: 60px !important;
+    margin-bottom: 0 !important;
+}
+
+/* Réduire l'espacement après le menu */
+body > .container.my-5,
+body > .container {
+    margin-top: 1.5rem !important;
+}
+
+.custom-navbar {
+    margin-bottom: 0 !important;
+}
+
+.custom-navbar .container {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+}
+
+.custom-navbar {
+    background: #ffffff !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.navbar-brand {
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+    color: #1a2745 !important;
+    font-size: 1.35rem;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+    margin-right: 1rem;
+}
+
+.custom-navbar .navbar-nav {
+    align-items: center;
+}
+
+.custom-navbar .nav-link {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    font-size: 1.05rem;
+    margin: 0 0.5rem;
+    color: #1a2745 !important;
+    font-weight: 700 !important;
+    transition: color 0.3s ease;
+}
+
+.custom-navbar .nav-link:hover {
+    color: #1a2745 !important;
+}
+
+.custom-navbar .nav-link.active {
+    color: #1a2745 !important;
+    font-weight: 700 !important;
+}
+
+.printer-status-text {
+    font-size: 0.95rem;
+    color: #1a2745 !important;
+    white-space: nowrap;
+    font-weight: 700 !important;
+}
+
+.printer-status-text strong {
+    color: #1a2745 !important;
+    font-size: 1rem;
+    font-weight: 700 !important;
+}
+
+#printerIcon {
+    font-size: 1.2rem;
+}
+
+#printerIcon.connected {
+    color: var(--success-color) !important;
+}
+
+#printerIcon.disconnected {
+    color: var(--danger-color) !important;
+}
+
+.custom-navbar .navbar-toggler {
+    border-color: var(--primary-color);
+}
+
+.custom-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2826, 39, 69, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* Cards */
+.card {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-light);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-lg) !important;
+}
+
+.card-header {
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+    background: linear-gradient(135deg, #1a2745 0%, #141d32 100%);
+    padding: 1.25rem 1.5rem;
+}
+
+.shadow-lg {
+    box-shadow: var(--shadow-lg) !important;
+}
+
+/* QR Code Display */
+.qr-display {
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    display: inline-block;
+    box-shadow: var(--shadow-md);
+    margin: 20px 0;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.qr-display:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.qr-display img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+}
+
+/* Form Styles */
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.form-control,
+.form-select {
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.65rem 1rem;
+    transition: all 0.3s ease;
+    background-color: var(--bg-light);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(26, 39, 69, 0.15);
+    background-color: var(--bg-light);
+}
+
+.form-control:hover,
+.form-select:hover {
+    border-color: #ced4da;
+}
+
+/* Buttons */
+.btn {
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    padding: 0.65rem 1.5rem;
+    border: none;
+    letter-spacing: 0.3px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #1a2745 0%, #141d32 100%);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #141d32 0%, #0f1624 100%);
+}
+
+.btn-success {
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-lg {
+    padding: 0.85rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 12px;
+}
+
+.btn-outline-primary,
+.btn-outline-success,
+.btn-outline-secondary {
+    border-width: 2px;
+    font-weight: 600;
+}
+
+.btn-outline-primary {
+    border-color: #1a2745 !important;
+    color: #1a2745 !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: #1a2745 !important;
+    border-color: #1a2745 !important;
+    color: #ffffff !important;
+}
+
+/* Table Styles */
+.table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table thead {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table thead th {
+    font-weight: 700;
+    color: #495057;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+}
+
+.table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-hover tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(26, 39, 69, 0.06);
+    transform: scale(1.01);
+}
+
+/* Status Badges */
+.badge {
+    padding: 0.5em 0.75em;
+    font-weight: 500;
+}
+
+/* Toast Notifications */
+.toast {
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Loading Spinner */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Printer Status */
+#printerIcon {
+    color: var(--success-color);
+}
+
+#printerIcon.disconnected {
+    color: var(--danger-color);
+}
+
+/* Container */
+.container {
+    padding: 2rem 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem 0.75rem;
+    }
+    
+    .card {
+        margin: 10px 0;
+        border-radius: 12px;
+    }
+    
+    .qr-display {
+        padding: 20px;
+    }
+    
+    .btn-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+    }
+}
+
+/* Animation pour l'apparition du QR Code */
+#qrResult {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Stat Cards */
+.card.text-white {
+    border-radius: 12px;
+    border: none;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.card.text-white:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg) !important;
+}
+
+.card.text-white .card-body {
+    padding: 1.75rem;
+}
+
+.card.bg-primary {
+    background: linear-gradient(135deg, #1a2745 0%, #141d32 100%) !important;
+}
+
+.card.bg-success {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%) !important;
+}
+
+.card.bg-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%) !important;
+}
+
+/* Action buttons in table */
+.btn-group .btn {
+    margin: 0 2px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--secondary-color);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    opacity: 0.2;
+    margin-bottom: 1rem;
+    color: var(--secondary-color);
+}
+
+/* Additional polish */
+.card-body {
+    padding: 2rem;
+}
+
+.shadow-sm {
+    box-shadow: var(--shadow-sm) !important;
+}
+
+/* Status card improvements */
+.card.mt-3 {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-light);
+}
+
+.card.mt-3 .card-body {
+    padding: 1.25rem;
+}
+
+/* Improved spacing */
+.my-5 {
+    margin-top: 3rem !important;
+    margin-bottom: 3rem !important;
+}
+
+/* Smooth scroll */
+html {
+    scroll-behavior: smooth;
+}
+
+/* QR Code Display Box */
+.qr-display-card {
+    min-height: 600px;
+}
+
+#qrDisplayCard {
+    min-height: 550px;
+}
+
+#qrEmptyState {
+    padding: 2rem;
+}
+
+#qrResult {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Responsive pour les deux colonnes */
+@media (max-width: 991px) {
+    #qrDisplayCard {
+        min-height: auto;
+        padding: 2rem 0;
+    }
+}
+

@@ -1,0 +1,289 @@
+# 🖨️ QR Code Print - Application Flask pour Impression Thermique POS
+
+Application web complète pour générer et imprimer des QR Codes via une imprimante thermique POS (80mm).
+
+## ✨ Fonctionnalités
+
+- ✅ Génération de QR Codes uniques signés cryptographiquement
+- ✅ Impression thermique directe sur imprimante POS USB ou réseau
+- ✅ Gestion d'expiration (24h, 7j, 30j, ou personnalisé)
+- ✅ Dashboard administrateur pour gérer tous les QR Codes
+- ✅ Interface moderne et intuitive avec Bootstrap 5
+- ✅ Base de données SQLite pour stockage local
+- ✅ APIs REST complètes
+- ✅ Téléchargement des QR Codes en PNG
+- ✅ Sécurité avec signature HMAC et protection CSRF
+
+## 📋 Prérequis
+
+- Python 3.8 ou supérieur
+- Imprimante thermique POS compatible ESC/POS (USB ou réseau)
+- Windows/Linux/macOS
+
+## 🚀 Installation
+
+### 1. Cloner ou télécharger le projet
+
+```bash
+cd QrCodePrint
+```
+
+### 2. Créer un environnement virtuel (recommandé)
+
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/macOS
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Installer les dépendances
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurer l'imprimante (optionnel)
+
+Si vous avez une imprimante réseau ou besoin de spécifier un périphérique USB particulier, éditez `config.py` :
+
+```python
+# Pour une imprimante réseau
+PRINTER_NETWORK_IP = "192.168.1.100"  # IP de l'imprimante
+PRINTER_NETWORK_PORT = 9100
+
+# Pour une imprimante USB spécifique
+PRINTER_USB_VENDOR_ID = 0x04f9  # ID fabricant (optionnel)
+PRINTER_USB_PRODUCT_ID = 0x2090  # ID produit (optionnel)
+```
+
+**Note:** Pour l'auto-détection USB, laissez ces valeurs à `None`.
+
+### 5. Lancer l'application
+
+```bash
+python app.py
+```
+
+L'application sera accessible à l'adresse: **http://localhost:5000**
+
+## 🔧 Configuration de l'Imprimante Thermique
+
+### Imprimante USB
+
+1. **Branchez l'imprimante** via USB à votre ordinateur
+2. **Installez les pilotes** (généralement automatique sous Windows)
+3. L'application **détectera automatiquement** l'imprimante au démarrage
+
+**Dépannage USB :**
+- Vérifiez que l'imprimante est allumée et connectée
+- Sur Linux, vous devrez peut-être ajouter votre utilisateur au groupe `lp` :
+  ```bash
+  sudo usermod -a -G lp $USER
+  ```
+- Sur Windows, vérifiez dans le Gestionnaire de périphériques que l'imprimante est reconnue
+
+### Imprimante Réseau
+
+1. **Connectez l'imprimante au réseau** (WiFi ou Ethernet)
+2. **Notez l'adresse IP** de l'imprimante (généralement accessible via l'écran LCD)
+3. **Configurez dans `config.py`** :
+   ```python
+   PRINTER_NETWORK_IP = "192.168.1.100"
+   PRINTER_NETWORK_PORT = 9100  # Port par défaut pour ESC/POS
+   ```
+4. **Testez la connectivité** :
+   ```bash
+   ping 192.168.1.100
+   ```
+
+### Imprimantes Testées/Compatibles
+
+- ✅ Epson TM-T20, TM-T82, TM-T88
+- ✅ Star Micronics TSP143, TSP650
+- ✅ Bixolon SRP-350, SRP-350plus
+- ✅ Zjiang ZJ-5870, ZJ-5890
+- ✅ Toutes les imprimantes compatibles ESC/POS
+
+## 📖 Utilisation
+
+### Page d'Accueil - Créer un QR Code
+
+1. **Remplissez le formulaire** :
+   - Nom (obligatoire) et Prénom
+   - Téléphone et Email (optionnels)
+   - Identifiant interne et Numéro de ticket
+   - Service et Commentaire
+   - Durée d'expiration (24h, 7j, 30j, ou personnalisé)
+
+2. **Cliquez sur "Générer le QR Code"**
+
+3. **Le QR Code s'affiche** avec :
+   - Image du QR Code
+   - Date d'expiration
+   - Boutons pour imprimer, télécharger ou créer un nouveau
+
+4. **Cliquez sur "Imprimer maintenant"** pour lancer l'impression thermique
+
+### Dashboard Administrateur
+
+Accédez via le menu **Dashboard** pour :
+
+- 📊 **Voir les statistiques** : Total, Actifs, Expirés
+- 📋 **Lister tous les QR Codes** générés
+- 🔍 **Filtrer** par statut (Tous, Actifs, Expirés)
+- 👁️ **Voir** le QR Code en grand format
+- 🖨️ **Réimprimer** un QR Code existant
+- 🗑️ **Supprimer** un QR Code
+
+## 🏗️ Structure du Projet
+
+```
+QrCodePrint/
+│
+├── app.py                 # Application Flask principale
+├── config.py              # Configuration
+├── requirements.txt       # Dépendances Python
+├── database.db            # Base de données SQLite (créée automatiquement)
+│
+├── templates/             # Templates HTML
+│   ├── index.html        # Page d'accueil
+│   └── dashboard.html    # Dashboard admin
+│
+└── static/               # Fichiers statiques
+    ├── css/
+    │   └── style.css     # Styles personnalisés
+    ├── js/
+    │   ├── main.js       # Script page d'accueil
+    │   └── dashboard.js  # Script dashboard
+    └── qr/               # Dossier pour stocker les QR Codes (auto-créé)
+```
+
+## 🔌 APIs REST
+
+### Créer un QR Code
+```
+POST /api/create_qr
+Content-Type: application/json
+
+{
+  "client_name": "Dupont",
+  "client_firstname": "Jean",
+  "client_phone": "0612345678",
+  "client_email": "jean@example.com",
+  "client_id": "CLI-001",
+  "ticket_number": "TKT-123",
+  "service": "Réparation",
+  "comment": "Urgent",
+  "expiration": "24h"  // ou "7j", "30j", "custom"
+  // Si "custom": "custom_hours": 48
+}
+```
+
+### Imprimer un QR Code
+```
+POST /api/print_qr/<qr_id>
+```
+
+### Lister les QR Codes
+```
+GET /api/list_qr?filter=all  // ou "active", "expired"
+```
+
+### Supprimer un QR Code
+```
+DELETE /api/delete_qr/<qr_id>
+```
+
+### Obtenir l'image d'un QR Code
+```
+GET /api/qr_image/<qr_id>
+```
+
+### Vérifier le statut
+```
+GET /api/status
+```
+
+## 🔒 Sécurité
+
+- **Signature HMAC** : Chaque QR Code est signé cryptographiquement
+- **Protection CSRF** : Flask-WTF pour les formulaires
+- **Validation des entrées** : Tous les inputs sont validés et filtrés
+- **Expiration automatique** : Les QR Codes deviennent invalides après expiration
+
+## 🐛 Dépannage
+
+### L'imprimante n'est pas détectée
+
+1. **Vérifiez la connexion** (USB ou réseau)
+2. **Vérifiez les permissions** (Linux: groupe `lp`)
+3. **Testez avec l'API status** : `GET /api/status`
+4. **Consultez les logs** de l'application Flask
+
+### Erreur lors de l'impression
+
+- Assurez-vous que l'imprimante est **allumée**
+- Vérifiez qu'il y a **du papier** dans l'imprimante
+- Testez avec une **autre application** (Bloc-notes → Imprimer)
+- Vérifiez les **pilotes** de l'imprimante
+
+### Erreur de base de données
+
+- Supprimez `database.db` et relancez l'application (re-création automatique)
+- Vérifiez les permissions d'écriture dans le dossier du projet
+
+### Le QR Code ne s'imprime pas correctement
+
+- Vérifiez que l'imprimante supporte **l'impression d'images**
+- Certaines imprimantes nécessitent des **pilotes spécifiques**
+- Testez avec une **imprimante différente** si possible
+
+## 🚀 Déploiement en Production
+
+### Recommandations
+
+1. **Changer la SECRET_KEY** dans `config.py` :
+   ```python
+   SECRET_KEY = os.environ.get('SECRET_KEY') or 'votre-cle-secrete-tres-longue-et-aleatoire'
+   ```
+
+2. **Utiliser un serveur WSGI** (Gunicorn, uWSGI) :
+   ```bash
+   pip install gunicorn
+   gunicorn -w 4 -b 0.0.0.0:5000 app:app
+   ```
+
+3. **Configurer un reverse proxy** (Nginx, Apache)
+
+4. **Utiliser HTTPS** avec un certificat SSL
+
+5. **Sauvegarder régulièrement** `database.db`
+
+6. **Configurer un cron job** pour nettoyer les QR Codes expirés (optionnel, déjà géré dans l'app)
+
+## 📝 Notes Techniques
+
+- **Base de données** : SQLite pour simplicité (peut être migrée vers PostgreSQL/MySQL)
+- **QR Codes** : Utilise la bibliothèque `qrcode` avec correction d'erreur niveau M
+- **Impression** : Bibliothèque `python-escpos` pour compatibilité ESC/POS
+- **Frontend** : Bootstrap 5 + JavaScript vanilla (pas de framework JS)
+
+## 📄 Licence
+
+Ce projet est fourni "tel quel" pour un usage personnel ou commercial.
+
+## 🤝 Support
+
+Pour toute question ou problème :
+1. Vérifiez la section **Dépannage** ci-dessus
+2. Consultez les logs de l'application Flask
+3. Testez avec une imprimante différente si possible
+
+---
+
+**Développé avec ❤️ en Python/Flask**
+

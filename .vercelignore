@@ -1,0 +1,10 @@
+database.db
+__pycache__/
+*.pyc
+venv/
+env/
+.venv
+static/qr/
+.git/
+
+
