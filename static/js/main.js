@@ -3,6 +3,11 @@
 let currentQRId = null;
 let currentQRImage = null;
 
+function getCSRFToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
     checkPrinterStatus();
@@ -88,7 +93,8 @@ async function handleFormSubmit(e) {
         const response = await fetch('/api/create_qr', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify(formData)
         });
@@ -155,7 +161,10 @@ async function handlePrint() {
     
     try {
         const response = await fetch(`/api/print_qr/${currentQRId}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            }
         });
         
         const data = await response.json();

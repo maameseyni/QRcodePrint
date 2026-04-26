@@ -2,6 +2,20 @@
 
 let currentDeleteId = null;
 
+function getCSRFToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
     loadQRCodes();
@@ -72,7 +86,7 @@ async function loadQRCodes() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="9" class="text-center text-danger">
-                        Erreur: ${data.error || 'Impossible de charger les données'}
+                        Erreur: ${escapeHtml(data.error || 'Impossible de charger les données')}
                     </td>
                 </tr>
             `;
@@ -106,9 +120,14 @@ function displayQRCodes(qrCodes) {
     }
     
     tbody.innerHTML = qrCodes.map(qr => {
-        const createdDate = new Date(qr.created_at).toLocaleString('fr-FR');
-        const expirationDate = new Date(qr.expiration_date).toLocaleString('fr-FR');
-        const clientName = `${qr.client_name || ''} ${qr.client_firstname || ''}`.trim() || 'N/A';
+        const createdDate = escapeHtml(new Date(qr.created_at).toLocaleString('fr-FR'));
+        const expirationDate = escapeHtml(new Date(qr.expiration_date).toLocaleString('fr-FR'));
+        const clientNameRaw = `${qr.client_name || ''} ${qr.client_firstname || ''}`.trim() || 'N/A';
+        const clientName = escapeHtml(clientNameRaw);
+        const phone = escapeHtml(qr.client_phone || '-');
+        const ticket = qr.ticket_number ? '#' + escapeHtml(qr.ticket_number) : '-';
+        const service = escapeHtml(qr.service || '-');
+        const shortId = escapeHtml((qr.id || '').substring(0, 8)) + '...';
         
         const statusBadge = qr.is_expired
             ? '<span class="badge bg-danger">Expiré</span>'
@@ -116,11 +135,11 @@ function displayQRCodes(qrCodes) {
         
         return `
             <tr>
-                <td><small class="text-muted">${qr.id.substring(0, 8)}...</small></td>
+                <td><small class="text-muted">${shortId}</small></td>
                 <td>${clientName}</td>
-                <td>${qr.client_phone || '-'}</td>
-                <td>${qr.ticket_number ? '#' + qr.ticket_number : '-'}</td>
-                <td>${qr.service || '-'}</td>
+                <td>${phone}</td>
+                <td>${ticket}</td>
+                <td>${service}</td>
                 <td><small>${createdDate}</small></td>
                 <td><small>${expirationDate}</small></td>
                 <td>${statusBadge}</td>
@@ -170,7 +189,10 @@ function viewQRCode(qrId) {
 async function reprintQRCode(qrId) {
     try {
         const response = await fetch(`/api/print_qr/${qrId}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            }
         });
         
         const data = await response.json();
@@ -201,7 +223,8 @@ async function confirmDelete() {
         const response = await fetch(`/api/delete_qr/${currentDeleteId}`, {
             method: 'DELETE',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
             }
         });
         

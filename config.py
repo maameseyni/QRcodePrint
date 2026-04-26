@@ -3,10 +3,18 @@ from datetime import timedelta
 
 class Config:
     """Configuration de l'application Flask"""
+
+    @staticmethod
+    def _to_bool(value, default=False):
+        """Convertit une variable d'environnement en booléen."""
+        if value is None:
+            return default
+        return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
     
     # Flask
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production-2024'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    DEBUG = _to_bool.__func__(os.environ.get('FLASK_DEBUG'), default=False)
     
     # Base de données
     DATABASE_PATH = os.path.join(BASE_DIR, 'database.db')
@@ -35,7 +43,9 @@ class Config:
     PRINTER_ENCODING = 'cp850'  # Encodage pour caractères spéciaux
     
     # Sécurité
-    QR_SIGNATURE_KEY = os.environ.get('QR_SIGNATURE_KEY') or 'qr-signature-key-2024'
+    QR_SIGNATURE_KEY = os.environ.get('QR_SIGNATURE_KEY') or os.urandom(32).hex()
+    ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME') or 'admin'
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
     
     @staticmethod
     def init_app(app):

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify, send_file, abort
+from flask import Flask, render_template, request, jsonify, send_file, abort, Response
 from flask_wtf.csrf import CSRFProtect
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -26,6 +26,43 @@ app = Flask(__name__)
 app.config.from_object(Config)
 Config.init_app(app)
 csrf = CSRFProtect(app)
+
+
+def check_admin_auth():
+    """Vérifie l'authentification admin HTTP Basic."""
+    expected_password = app.config.get('ADMIN_PASSWORD')
+    if not expected_password:
+        app.logger.warning("ADMIN_PASSWORD non défini: routes admin non protégées.")
+        return True
+
+    auth = request.authorization
+    if not auth:
+        return False
+
+    expected_username = app.config.get('ADMIN_USERNAME', 'admin')
+    return (
+        hmac.compare_digest(auth.username or '', expected_username)
+        and hmac.compare_digest(auth.password or '', expected_password)
+    )
+
+
+def admin_auth_required():
+    """Retourne une réponse 401 pour déclencher l'auth HTTP Basic."""
+    return Response(
+        'Authentification requise',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Dashboard Admin"'}
+    )
+
+
+def require_admin(func):
+    """Décorateur pour protéger les routes administrateur."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not check_admin_auth():
+            return admin_auth_required()
+        return func(*args, **kwargs)
+    return wrapper
 
 # Initialisation de la base de données
 def init_db():
@@ -93,7 +130,7 @@ def verify_qr_signature(signed_data):
             hashlib.sha256
         ).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
-    except:
+    except (ValueError, TypeError):
         return False
 
 def generate_qr_code_image(data, size=None):
@@ -169,17 +206,17 @@ def index():
     return render_template('index.html')
 
 @app.route('/dashboard')
+@require_admin
 def dashboard():
     """Dashboard administrateur"""
     return render_template('dashboard.html')
 
 # APIs REST
 @app.route('/api/create_qr', methods=['POST'])
-@csrf.exempt  # Pour les requêtes AJAX, on peut désactiver CSRF côté API
 def create_qr():
     """API pour créer un nouveau QR Code"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         
         # Validation des données
         client_name = data.get('client_name', '').strip()
@@ -199,7 +236,10 @@ def create_qr():
         custom_hours = data.get('custom_hours')
         
         if expiration_option == 'custom' and custom_hours:
-            expiration_delta = timedelta(hours=int(custom_hours))
+            custom_hours_int = int(custom_hours)
+            if custom_hours_int < 1 or custom_hours_int > 8760:
+                return jsonify({'success': False, 'error': "L'expiration personnalisée doit être entre 1h et 8760h"}), 400
+            expiration_delta = timedelta(hours=custom_hours_int)
         else:
             expiration_delta = app.config['EXPIRATION_OPTIONS'].get(
                 expiration_option, 
@@ -264,12 +304,13 @@ def create_qr():
             'expiration_text': format_expiration_text(expiration_date)
         })
         
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': "Format de données invalide"}), 400
     except Exception as e:
         app.logger.error(f"Erreur lors de la création du QR Code: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': "Erreur interne"}), 500
 
 @app.route('/api/print_qr/<qr_id>', methods=['POST'])
-@csrf.exempt
 def print_qr(qr_id):
     """API pour imprimer un QR Code"""
     try:
@@ -281,6 +322,9 @@ def print_qr(qr_id):
         
         if not qr_record:
             return jsonify({'success': False, 'error': 'QR Code non trouvé'}), 404
+
+        if not verify_qr_signature(qr_record['qr_data']):
+            return jsonify({'success': False, 'error': 'Signature QR invalide'}), 400
         
         # Vérifier si expiré
         expiration_date = datetime.fromisoformat(qr_record['expiration_date'])
@@ -393,7 +437,7 @@ def print_qr(qr_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/list_qr', methods=['GET'])
-@csrf.exempt
+@require_admin
 def list_qr():
     """API pour lister tous les QR Codes"""
     try:
@@ -437,10 +481,10 @@ def list_qr():
         
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des QR Codes: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': "Erreur interne"}), 500
 
 @app.route('/api/delete_qr/<qr_id>', methods=['DELETE', 'POST'])
-@csrf.exempt
+@require_admin
 def delete_qr(qr_id):
     """API pour supprimer un QR Code"""
     try:
@@ -462,9 +506,10 @@ def delete_qr(qr_id):
         app.logger.error(f"Erreur lors de la suppression: {e}")
         import traceback
         app.logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': f'Erreur serveur: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': 'Erreur serveur'}), 500
 
 @app.route('/api/qr_image/<qr_id>')
+@require_admin
 def qr_image(qr_id):
     """API pour obtenir l'image du QR Code"""
     try:
@@ -477,6 +522,9 @@ def qr_image(qr_id):
         if not qr_record:
             abort(404)
         
+        if not verify_qr_signature(qr_record['qr_data']):
+            abort(400)
+
         qr_image = generate_qr_code_image(qr_record['qr_data'])
         img_io = BytesIO()
         qr_image.save(img_io, format='PNG')
@@ -533,5 +581,5 @@ if __name__ == '__main__':
     cleanup_expired_qr()
     
     # Lancer l'application
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=5000)
 

@@ -265,6 +265,34 @@ GET /api/status
 
 6. **Configurer un cron job** pour nettoyer les QR Codes expirés (optionnel, déjà géré dans l'app)
 
+### Variables d'environnement recommandées
+
+Créez un fichier `.env` à partir de `.env.example` et renseignez des valeurs fortes :
+
+```bash
+# Windows PowerShell
+Copy-Item .env.example .env
+
+# Linux/macOS
+cp .env.example .env
+```
+
+Variables minimales à définir en production :
+
+- `ADMIN_PASSWORD` : obligatoire pour protéger le dashboard et les APIs admin
+- `ADMIN_USERNAME` : optionnel (défaut: `admin`)
+- `SECRET_KEY` : clé Flask (session/CSRF), longue et aléatoire
+- `QR_SIGNATURE_KEY` : clé HMAC pour signer les QR codes, longue et aléatoire
+- `FLASK_DEBUG=0` : ne pas exposer le mode debug
+
+### Checklist sécurité production
+
+- Activer HTTPS derrière un reverse proxy (Nginx/Apache/Caddy)
+- Restreindre l'accès au dashboard admin (réseau interne/VPN si possible)
+- Sauvegarder régulièrement `database.db`
+- Mettre à jour les dépendances Python périodiquement
+- Surveiller les logs applicatifs et les erreurs d'impression
+
 ## 📝 Notes Techniques
 
 - **Base de données** : SQLite pour simplicité (peut être migrée vers PostgreSQL/MySQL)

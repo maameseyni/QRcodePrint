@@ -24,5 +24,5 @@ if __name__ == '__main__':
     print("\n💡 Appuyez sur Ctrl+C pour arrêter le serveur\n")
     
     # Lancer l'application
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=5000)
 
