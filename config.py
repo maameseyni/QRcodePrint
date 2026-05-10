@@ -1,6 +1,34 @@
 import os
 from datetime import timedelta
 
+
+def _normalize_env_secret(value):
+    """Retire espaces / guillemets accidentels (copier-coller .env ou tableau Render)."""
+    if value is None:
+        return None
+    v = str(value).strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        v = v[1:-1].strip()
+    return v or None
+
+
+def _session_hours_from_env():
+    """Durée max de session ; 0 ou invalide → 12 h (évite expiration immédiate si SESSION_HOURS=0)."""
+    raw = os.environ.get('SESSION_HOURS', '12')
+    try:
+        h = int(str(raw).strip())
+    except ValueError:
+        return 12
+    if h <= 0:
+        return 12
+    return min(h, 720)  # plafond 30 jours
+
+
+_ENV_SECRET_KEY = _normalize_env_secret(os.environ.get('SECRET_KEY'))
+_ENV_QR_SIGNATURE_KEY = _normalize_env_secret(os.environ.get('QR_SIGNATURE_KEY'))
+_SESSION_HOURS = _session_hours_from_env()
+
+
 class Config:
     """Configuration de l'application Flask"""
 
@@ -11,8 +39,8 @@ class Config:
             return default
         return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
     
-    # Flask
-    SECRET_KEY = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
+    # Flask (clé stable obligatoire en prod : voir init_app + README / Render)
+    SECRET_KEY = _ENV_SECRET_KEY or os.urandom(32).hex()
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     DEBUG = _to_bool.__func__(os.environ.get('FLASK_DEBUG'), default=False)
     # Render/Heroku définissent PORT ; en local on utilise APP_PORT (ex. 5055).
@@ -47,7 +75,7 @@ class Config:
     PRINTER_STATUS_CACHE_SECONDS = float(os.environ.get('PRINTER_STATUS_CACHE_SECONDS', '25'))
     
     # Sécurité
-    QR_SIGNATURE_KEY = os.environ.get('QR_SIGNATURE_KEY') or os.urandom(32).hex()
+    QR_SIGNATURE_KEY = _ENV_QR_SIGNATURE_KEY or os.urandom(32).hex()
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME') or 'admin'
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
     ADMIN_FULL_NAME = os.environ.get('ADMIN_FULL_NAME') or 'Administrateur'
@@ -61,7 +89,7 @@ class Config:
     SUPERADMIN_ADDRESS = os.environ.get('SUPERADMIN_ADDRESS') or ''
     OPERATOR_USERNAME = os.environ.get('OPERATOR_USERNAME') or 'operator'
     OPERATOR_PASSWORD = os.environ.get('OPERATOR_PASSWORD')
-    SESSION_HOURS = int(os.environ.get('SESSION_HOURS', '12'))
+    SESSION_HOURS = _SESSION_HOURS
     PERMANENT_SESSION_LIFETIME = timedelta(hours=SESSION_HOURS)
     EXPORT_MAX_ROWS = int(os.environ.get('EXPORT_MAX_ROWS', '5000'))
     # Tableau dashboard : documents Firestore max lus avant filtres Python, puis pagination.
@@ -106,14 +134,25 @@ class Config:
         # Créer le dossier pour les QR codes s'il n'existe pas
         os.makedirs(Config.QR_CODE_DIR, exist_ok=True)
         app.permanent_session_lifetime = Config.PERMANENT_SESSION_LIFETIME
+        # Fenêtre glissante : chaque requête HTTP repousse l’expiration tant que l’utilisateur est actif.
+        app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+        app.logger.info(
+            "Sessions : durée max %s h, renouvellement à chaque requête (active utilisateur).",
+            Config.SESSION_HOURS,
+        )
         # Sans SECRET_KEY en env, Flask utilise une clé aléatoire régénérée à chaque processus :
         # tout redémarrage (déploiement, cold start PaaS, scale) invalide les cookies de session.
-        if not (os.environ.get('SECRET_KEY') or '').strip():
+        if not _ENV_SECRET_KEY:
             app.logger.warning(
                 "SECRET_KEY absent des variables d'environnement : une clé aléatoire est "
                 "générée au démarrage. Les connexions sont perdues à chaque redémarrage du "
                 "serveur (déploiement, mise en veille puis réveil, etc.). Définissez SECRET_KEY "
                 "sur Render / votre hébergeur."
+            )
+        elif len(_ENV_SECRET_KEY) < 16:
+            app.logger.warning(
+                "SECRET_KEY très courte (%s car.) : préférez une chaîne aléatoire longue (ex. token_hex(32)).",
+                len(_ENV_SECRET_KEY),
             )
         # Render : HTTPS public ; cookies de session marqués Secure (évite envoi en clair).
         if os.environ.get('RENDER') or str(os.environ.get('FORCE_SECURE_COOKIES', '')).strip().lower() in (

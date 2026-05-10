@@ -205,6 +205,26 @@ def _current_owner_id():
     return str(session.get('user_id') or '')
 
 
+def _user_dict_from_session(uid: str):
+    """
+    Repli si Firestore est temporairement indisponible : reprend les champs copiés en session à la connexion.
+    Évite une déconnexion immédiate lors de timeouts / quotas GCP.
+    """
+    suid = str(uid or '').strip()
+    if not suid or str(session.get('user_id') or '').strip() != suid:
+        return None
+    return {
+        'id': suid,
+        'role': str(session.get('role') or 'user'),
+        'username': str(session.get('username') or ''),
+        'full_name': str(session.get('full_name') or ''),
+        'gym_name': str(session.get('gym_name') or ''),
+        'phone': str(session.get('phone') or ''),
+        'address': str(session.get('address') or ''),
+        'is_active': True,
+    }
+
+
 def _current_user():
     """Un seul aller-retour Firestore par requête HTTP (décorateurs + context_processor)."""
     if '_qrprint_user' in g:
@@ -213,13 +233,40 @@ def _current_user():
     if not uid:
         g._qrprint_user = None
         return None
-    user = store.get_user_by_id(uid)
+
+    user = None
+    firestore_failed = False
+    for attempt in range(3):
+        try:
+            user = store.get_user_by_id(uid)
+            firestore_failed = False
+            break
+        except GoogleAPICallError as e:
+            firestore_failed = True
+            if attempt < 2:
+                time.sleep(0.12 * (attempt + 1))
+            else:
+                app.logger.warning(
+                    "Firestore: lecture utilisateur %s impossible après 3 tentatives: %s",
+                    uid,
+                    e,
+                )
+
+    if user is None and firestore_failed:
+        user = _user_dict_from_session(uid)
+        if user:
+            g._qrprint_user = user
+            return user
+
     if not user:
         g._qrprint_user = None
         return None
     if not bool(user.get('is_active', True)):
         g._qrprint_user = None
         return None
+    if 'phone' not in session or 'address' not in session:
+        session['phone'] = str(user.get('phone') or '')
+        session['address'] = str(user.get('address') or '')
     g._qrprint_user = user
     return user
 
@@ -1040,6 +1087,8 @@ def _login_session_from_user(user):
     session['username'] = str(user.get('username') or '')
     session['full_name'] = str(user.get('full_name') or '')
     session['gym_name'] = str(user.get('gym_name') or '')
+    session['phone'] = str(user.get('phone') or '')
+    session['address'] = str(user.get('address') or '')
     session.permanent = True
 
 
@@ -1181,6 +1230,8 @@ def login():
                 session['username'] = str(user.get('username') or username)
                 session['full_name'] = str(user.get('full_name') or '')
                 session['gym_name'] = str(user.get('gym_name') or '')
+                session['phone'] = str(user.get('phone') or '')
+                session['address'] = str(user.get('address') or '')
                 session.permanent = True
                 nxt = _safe_next_url(request.form.get('next'))
                 return redirect(nxt or url_for('index'))
@@ -1275,6 +1326,8 @@ def complete_profile():
             })
             session['gym_name'] = gym_name
             session['full_name'] = gym_name
+            session['phone'] = phone
+            session['address'] = address
             return redirect(url_for('index'))
 
     return render_template(
