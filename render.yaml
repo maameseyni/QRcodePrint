@@ -12,3 +12,7 @@ services:
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 app:app
     healthCheckPath: /login
     autoDeployTrigger: commit
+    # Sans cela Render peut prendre Python 3.14 → échec build Pillow / wheels.
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
