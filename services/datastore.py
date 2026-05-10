@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -37,6 +38,16 @@ class FirestoreDataStore:
             cred_json = self.config.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
             cred_path = self.config.get("GOOGLE_APPLICATION_CREDENTIALS")
             project_id = self.config.get("FIRESTORE_PROJECT_ID")
+
+            # Chemin copié depuis une machine locale (ex. Windows) : absent sur Render → ne pas ouvrir.
+            if cred_path and str(cred_path).strip():
+                p = str(cred_path).strip()
+                cred_path = p if os.path.isfile(p) else None
+            # Même nettoyage pour la variable standard GCP (évite ADC sur un fichier inexistant).
+            gae = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            if gae and not os.path.isfile(gae):
+                os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
             if cred_json and str(cred_json).strip():
                 cred = credentials.Certificate(json.loads(cred_json))
                 options = {"projectId": project_id} if project_id else None

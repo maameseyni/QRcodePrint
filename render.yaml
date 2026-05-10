@@ -8,7 +8,8 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    # Ne pas faire « upgrade setuptools » sans borne : la 82+ supprime pkg_resources (python-escpos).
+    buildCommand: pip install --upgrade pip wheel && pip install "setuptools>=69.0.0,<82" && pip install -r requirements.txt
     preDeployCommand: python scripts/render_init.py
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 app:app
     healthCheckPath: /login

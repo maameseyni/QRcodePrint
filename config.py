@@ -104,6 +104,13 @@ class Config:
         # Créer le dossier pour les QR codes s'il n'existe pas
         os.makedirs(Config.QR_CODE_DIR, exist_ok=True)
         app.permanent_session_lifetime = Config.PERMANENT_SESSION_LIFETIME
+        # Render : HTTPS public ; cookies de session marqués Secure (évite envoi en clair).
+        if os.environ.get('RENDER') or str(os.environ.get('FORCE_SECURE_COOKIES', '')).strip().lower() in (
+            '1', 'true', 'yes', 'on',
+        ):
+            app.config['SESSION_COOKIE_SECURE'] = True
+            app.config['SESSION_COOKIE_HTTPONLY'] = True
+            app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
         # OAuth Google en http://127.0.0.1 (dev) : oauthlib refuse HTTP sans ce réglage.
         if app.debug:
             os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
