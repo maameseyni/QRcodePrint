@@ -97,6 +97,8 @@ class Config:
     # OAuth Google (connexion « Continuer avec Google »)
     GOOGLE_CLIENT_ID = (os.environ.get('GOOGLE_CLIENT_ID') or '').strip() or None
     GOOGLE_CLIENT_SECRET = (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip() or None
+    # Sans slash final. Si défini, l’URI de redirection OAuth utilise cette base (évite redirect_uri_mismatch en prod).
+    PUBLIC_URL = (os.environ.get('PUBLIC_URL') or os.environ.get('OAUTH_PUBLIC_BASE_URL') or '').strip().rstrip('/') or None
 
     @staticmethod
     def init_app(app):

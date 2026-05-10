@@ -239,12 +239,20 @@
                     <p class="small text-muted text-center mb-3 mb-md-2">
                         Même ordre qu’à l’impression : texte, QR, puis pied de page (aperçu 80&nbsp;mm).
                     </p>
-                    <div id="dashboardTicketPreview" class="ticket-receipt-sheet mx-auto" role="region" aria-label="Aperçu du ticket thermique"></div>
+                    <div class="ticket-modal-scale-outer">
+                        <div class="ticket-scale-clip">
+                            <div class="ticket-scale-stage">
+                                <div id="dashboardTicketPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer flex-wrap gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                    <button type="button" class="btn btn-success" id="dashboardTicketPrintBtn">
-                        <i class="bi bi-printer"></i> Imprimer
+                <div class="modal-footer flex-wrap gap-2 justify-content-center ticket-modal-footer-icons ticket-modal-footer-two">
+                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="dashboardTicketDownloadBtn" title="Télécharger le ticket (PNG)" aria-label="Télécharger le ticket">
+                        <i class="bi bi-download" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="dashboardTicketPrintBtn" title="Imprimer" aria-label="Imprimer">
+                        <i class="bi bi-printer" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
@@ -283,7 +291,9 @@
 
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/ticket-scale.js') }}"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

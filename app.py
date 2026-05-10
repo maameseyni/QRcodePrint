@@ -73,6 +73,14 @@ def _google_oauth_configured() -> bool:
     return bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'))
 
 
+def _google_oauth_redirect_uri() -> str:
+    """Doit être identique à une « URI de redirection autorisée » dans Google Cloud (erreur 400 redirect_uri_mismatch sinon)."""
+    base = app.config.get('PUBLIC_URL')
+    if base:
+        return f"{base}/auth/google/callback"
+    return url_for('auth_google_callback', _external=True)
+
+
 def jsonify_firestore_error(operation: str, exc: GoogleAPICallError):
     """Réponse JSON homogène pour les erreurs d'API Firestore (évite un 500 « Erreur interne »)."""
     app.logger.warning("Firestore %s: %s", operation, exc)
@@ -1193,7 +1201,7 @@ def auth_google():
         session['oauth_next'] = nxt
     else:
         session.pop('oauth_next', None)
-    redirect_uri = url_for('auth_google_callback', _external=True)
+    redirect_uri = _google_oauth_redirect_uri()
     return oauth.google.authorize_redirect(redirect_uri)
 
 

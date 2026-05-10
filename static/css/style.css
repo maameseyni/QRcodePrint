@@ -1041,6 +1041,7 @@ html {
     border-radius: 0;
     box-shadow: none;
     max-height: none;
+    overflow: visible;
     padding: 1rem 1.15rem;
 }
 
@@ -1067,6 +1068,14 @@ html {
 }
 
 .qr-result-with-ticket {
+    min-height: 0;
+}
+
+/* Colonne ticket : le bloc entre ligne d’expiration et boutons prend l’espace restant (flex) */
+.qr-result-with-ticket.qr-result-ticket-column {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
     min-height: 0;
 }
 
@@ -1116,6 +1125,7 @@ html {
     margin-bottom: 0;
     -webkit-font-smoothing: antialiased;
     white-space: pre;
+    overflow: visible;
 }
 
 .ticket-receipt-modern .ticket-preview-title {
@@ -1189,6 +1199,140 @@ html {
     max-width: min(220px, 85%);
     box-shadow: none;
     border-radius: 0;
+}
+
+/* --- Aperçu ticket : clip à la taille affichée (scale ne réduit pas le flux — évite le scroll fantôme) --- */
+.ticket-inline-scale-outer,
+.ticket-modal-scale-outer {
+    width: 100%;
+    max-width: min(100%, 100vw);
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    box-sizing: border-box;
+}
+
+/* Modal : cadre max pour le calcul JS de la hauteur disponible */
+.ticket-modal-scale-outer {
+    max-height: min(72vh, 620px);
+    max-height: min(72dvh, 620px);
+}
+
+/* Pied de modale ticket : boutons icônes uniquement (cible tactile ~46px) */
+.ticket-modal-footer-icons {
+    gap: 0.65rem !important;
+}
+
+.ticket-modal-footer-icons .btn-icon-foot {
+    width: 2.85rem;
+    height: 2.85rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+}
+
+.ticket-modal-footer-icons .btn-icon-foot i {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+/* Deux actions identiques (télécharger / imprimer), fermeture via en-tête ou backdrop */
+.ticket-modal-footer-two {
+    gap: 0.85rem !important;
+}
+
+.ticket-scale-clip {
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.ticket-scale-stage {
+    position: relative;
+    display: block;
+    margin-left: 0;
+    margin-right: 0;
+    transform-origin: top left;
+    flex-shrink: 0;
+    will-change: transform;
+}
+
+/* Largeur de référence identique au design bureau (56ch) ; le scale JS réduit tout d’un coup */
+.ticket-scale-stage .ticket-receipt-sheet.ticket-receipt-modern {
+    width: 56ch;
+    max-width: 56ch;
+    box-sizing: border-box;
+}
+
+.ticket-scale-stage .ticket-receipt-sheet.ticket-on-qr-box.ticket-receipt-modern {
+    width: 56ch;
+    max-width: 56ch;
+    flex: 0 0 auto;
+    max-height: none;
+    overflow-x: visible;
+    overflow-y: visible;
+}
+
+/* Annule .ticket-preview-pre { overflow: auto } : sans ça, barres de défilement dans l’aperçu mis à l’échelle */
+.ticket-scale-stage .ticket-preview-pre.ticket-preview-fragment {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
+/* Très petits téléphones : moins de padding dans la carte ticket pour gagner de la place au scaling */
+@media (max-width: 480px) {
+    #qrDisplayCard.card-body {
+        padding-left: 0.55rem !important;
+        padding-right: 0.55rem !important;
+        padding-top: 0.55rem !important;
+        padding-bottom: 0.45rem !important;
+    }
+
+    #expirationText {
+        margin-bottom: 0.28rem !important;
+        font-size: 0.74rem;
+        line-height: 1.2;
+    }
+
+    #qrResultActions .btn {
+        padding-top: 0.38rem;
+        padding-bottom: 0.38rem;
+        font-size: 0.85rem;
+    }
+
+    #qrResultActions .mt-2 {
+        margin-top: 0.35rem !important;
+    }
+}
+
+@media (max-width: 400px) {
+    #expirationText {
+        font-size: 0.7rem;
+        padding-left: 0.15rem;
+        padding-right: 0.15rem;
+    }
+
+    #qrDisplayCard.card-body {
+        padding-left: 0.45rem !important;
+        padding-right: 0.45rem !important;
+    }
+}
+
+@media (max-width: 360px) {
+    #expirationText {
+        font-size: 0.66rem;
+    }
+
+    #qrResultActions .btn {
+        font-size: 0.8rem;
+    }
 }
 
 /* Page connexion : plein écran + centrage fiable (évite les conflits body global / h-100) */

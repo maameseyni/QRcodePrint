@@ -187,11 +187,17 @@
                         </div>
                         
                         <!-- État avec ticket complet (texte + QR + pied) dans la carte -->
-                        <div id="qrResult" class="w-100 flex-grow-1 flex-column d-none qr-result-with-ticket">
-                            <p class="text-center text-muted small mb-2" id="expirationText"></p>
-                            <div id="inlineTicketSheet" class="ticket-receipt-sheet ticket-on-qr-box w-100 mb-3" role="region" aria-label="Aperçu du ticket sur le reçu"></div>
+                        <div id="qrResult" class="w-100 flex-grow-1 flex-column d-none qr-result-with-ticket qr-result-ticket-column">
+                            <p class="text-center text-muted small mb-2 flex-shrink-0" id="expirationText"></p>
+                            <div class="ticket-inline-scale-outer mb-2 flex-grow-1 min-h-0" aria-hidden="false">
+                                <div class="ticket-scale-clip">
+                                    <div class="ticket-scale-stage">
+                                        <div id="inlineTicketSheet" class="ticket-receipt-sheet ticket-on-qr-box" role="region" aria-label="Aperçu du ticket sur le reçu"></div>
+                                    </div>
+                                </div>
+                            </div>
 
-                            <div class="w-100 px-0">
+                            <div id="qrResultActions" class="w-100 px-0 flex-shrink-0 mt-auto">
                                 <div class="row g-2 justify-content-center qr-result-btn-row">
                                     <div class="col-12 col-sm-4">
                                         <button type="button" class="btn btn-success w-100 py-2" id="printBtn" disabled title="Aperçu puis imprimer">
@@ -229,14 +235,22 @@
                     <p class="small text-muted text-center mb-3 mb-md-2">
                         Aperçu du ticket complet (80&nbsp;mm) — même ordre qu’à l’impression : texte, QR, puis pied de page.
                     </p>
-                    <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto" role="region" aria-label="Aperçu du ticket thermique">
-                        <!-- Rempli par main.js : texte + QR + texte -->
+                    <div class="ticket-modal-scale-outer">
+                        <div class="ticket-scale-clip">
+                            <div class="ticket-scale-stage">
+                                <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique">
+                                    <!-- Rempli par main.js : texte + QR + texte -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer flex-wrap gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                    <button type="button" class="btn btn-success" id="confirmPrintBtn">
-                        <i class="bi bi-printer"></i> Confirmer l'impression
+                <div class="modal-footer flex-wrap gap-2 justify-content-center ticket-modal-footer-icons ticket-modal-footer-two">
+                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="ticketPreviewDownloadBtn" title="Télécharger le ticket (PNG)" aria-label="Télécharger le ticket">
+                        <i class="bi bi-download" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="confirmPrintBtn" title="Imprimer" aria-label="Confirmer l'impression">
+                        <i class="bi bi-printer" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
@@ -258,6 +272,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/ticket-scale.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

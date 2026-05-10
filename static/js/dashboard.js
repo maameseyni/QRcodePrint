@@ -320,6 +320,35 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const dashboardTicketDownloadBtn = document.getElementById('dashboardTicketDownloadBtn');
+    if (dashboardTicketDownloadBtn) {
+        dashboardTicketDownloadBtn.addEventListener('click', function () {
+            downloadDashboardTicketPng();
+        });
+    }
+
+    const dashboardTicketModal = document.getElementById('dashboardTicketModal');
+    if (dashboardTicketModal) {
+        dashboardTicketModal.addEventListener('shown.bs.modal', function () {
+            scheduleDashboardTicketModalScale();
+            setTimeout(scheduleDashboardTicketModalScale, 50);
+        });
+    }
+    let dashboardTicketScaleResizeT = null;
+    window.addEventListener('resize', function () {
+        clearTimeout(dashboardTicketScaleResizeT);
+        dashboardTicketScaleResizeT = setTimeout(scheduleDashboardTicketModalScale, 100);
+    });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', scheduleDashboardTicketModalScale);
+    }
+    const dashboardTicketScaleOuter = document.querySelector('#dashboardTicketModal .ticket-modal-scale-outer');
+    if (dashboardTicketScaleOuter && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(function () {
+            scheduleDashboardTicketModalScale();
+        }).observe(dashboardTicketScaleOuter);
+    }
+
     setInterval(loadQRCodes, DASHBOARD_REFRESH_MS);
     setInterval(checkPrinterStatus, 30000);
 });
@@ -686,6 +715,19 @@ function renderDashboardTicketSheet(container, payload) {
     }
 }
 
+/** Même logique que scheduleTicketScale sur l’accueil : ticket entier visible sur mobile. */
+function scheduleDashboardTicketModalScale() {
+    if (typeof applyProportionalTicketScale !== 'function') return;
+    const modalEl = document.getElementById('dashboardTicketModal');
+    const outer = document.querySelector('#dashboardTicketModal .ticket-modal-scale-outer');
+    if (!modalEl || !outer || !modalEl.classList.contains('show')) return;
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+            applyProportionalTicketScale(outer);
+        });
+    });
+}
+
 async function viewQRCode(qrId) {
     const modalEl = document.getElementById('dashboardTicketModal');
     const sheet = document.getElementById('dashboardTicketPreview');
@@ -731,6 +773,10 @@ async function viewQRCode(qrId) {
                 : '<i class="bi bi-receipt"></i> Ticket complet';
         }
 
+        scheduleDashboardTicketModalScale();
+        setTimeout(scheduleDashboardTicketModalScale, 80);
+        setTimeout(scheduleDashboardTicketModalScale, 280);
+
         const printBtn = document.getElementById('dashboardTicketPrintBtn');
         if (printBtn) {
             printBtn.disabled = !!(data.is_expired || !data.is_active);
@@ -739,6 +785,37 @@ async function viewQRCode(qrId) {
         console.error(e);
         dashboardTicketModalInstance.hide();
         showToast('Erreur', 'Impossible de charger le ticket', 'danger');
+    }
+}
+
+async function downloadDashboardTicketPng() {
+    const source = document.getElementById('dashboardTicketPreview');
+    if (!source || source.querySelector('.spinner-border')) {
+        showToast('Erreur', 'Ticket encore en chargement ou indisponible', 'warning');
+        return;
+    }
+    if (!source.querySelector('.ticket-preview-qr-img, .ticket-preview-title')) {
+        showToast('Erreur', 'Aucun ticket à télécharger', 'warning');
+        return;
+    }
+    if (typeof window.html2canvas !== 'function') {
+        showToast('Erreur', 'Bibliothèque de capture non chargée', 'danger');
+        return;
+    }
+    try {
+        const canvas = await html2canvasTicketSheet(source);
+        scheduleDashboardTicketModalScale();
+
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = 'ticket-' + (dashboardTicketViewId || 'download') + '.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Succès', 'Ticket téléchargé !', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Erreur', 'Erreur lors du téléchargement', 'danger');
     }
 }
 

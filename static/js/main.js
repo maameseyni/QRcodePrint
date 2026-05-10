@@ -136,6 +136,27 @@ function renderTicketSheet(container) {
     }
 }
 
+let _ticketScaleRaf = 0;
+
+function scheduleTicketScale() {
+    if (_ticketScaleRaf) cancelAnimationFrame(_ticketScaleRaf);
+    _ticketScaleRaf = requestAnimationFrame(() => {
+        _ticketScaleRaf = requestAnimationFrame(() => {
+            _ticketScaleRaf = 0;
+            const qrRes = document.getElementById('qrResult');
+            const inlineOuter = document.querySelector('.ticket-inline-scale-outer');
+            if (inlineOuter && qrRes && !qrRes.classList.contains('d-none')) {
+                applyProportionalTicketScale(inlineOuter);
+            }
+            const modal = document.getElementById('ticketPreviewModal');
+            const modalOuter = document.querySelector('.ticket-modal-scale-outer');
+            if (modalOuter && modal && modal.classList.contains('show')) {
+                applyProportionalTicketScale(modalOuter);
+            }
+        });
+    });
+}
+
 function openTicketPreviewModal() {
     const modalEl = document.getElementById('ticketPreviewModal');
     const sheet = document.getElementById('ticketFullPreview');
@@ -147,6 +168,7 @@ function openTicketPreviewModal() {
         ticketPreviewModalInstance = new bootstrap.Modal(modalEl);
     }
     ticketPreviewModalInstance.show();
+    /* Mise à l’échelle après ouverture : voir shown.bs.modal → scheduleTicketScale */
 }
 
 async function sendPrintRequest() {
@@ -262,7 +284,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const btn = confirmPrintBtn;
             const prev = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Impression...';
+            btn.innerHTML =
+                '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            btn.setAttribute('aria-busy', 'true');
             try {
                 const ok = await sendPrintRequest();
                 if (ok && ticketPreviewModalInstance) {
@@ -271,12 +295,45 @@ document.addEventListener('DOMContentLoaded', function() {
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = prev;
+                btn.removeAttribute('aria-busy');
             }
+        });
+    }
+
+    const ticketPreviewDownloadBtn = document.getElementById('ticketPreviewDownloadBtn');
+    if (ticketPreviewDownloadBtn) {
+        ticketPreviewDownloadBtn.addEventListener('click', function () {
+            handleTicketPreviewModalDownload();
         });
     }
 
     document.getElementById('downloadBtn').addEventListener('click', handleDownload);
     document.getElementById('resetBtn').addEventListener('click', handleReset);
+
+    const ticketModalEl = document.getElementById('ticketPreviewModal');
+    if (ticketModalEl) {
+        ticketModalEl.addEventListener('shown.bs.modal', () => scheduleTicketScale());
+    }
+
+    let resizeScaleT = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeScaleT);
+        resizeScaleT = setTimeout(() => scheduleTicketScale(), 100);
+    });
+
+    const inlineScaleOuter = document.querySelector('.ticket-inline-scale-outer');
+    if (inlineScaleOuter && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => scheduleTicketScale()).observe(inlineScaleOuter);
+    }
+    const qrDisplayCard = document.getElementById('qrDisplayCard');
+    if (qrDisplayCard && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => scheduleTicketScale()).observe(qrDisplayCard);
+    }
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => scheduleTicketScale());
+        window.visualViewport.addEventListener('scroll', () => scheduleTicketScale());
+    }
 
     setInterval(checkPrinterStatus, 30000);
 });
@@ -436,6 +493,9 @@ function displayQRCode(data) {
     expirationText.textContent = `${ticketInfo}Expire dans : ${data.expiration_text}`;
 
     renderTicketSheet(inlineSheet);
+    scheduleTicketScale();
+    setTimeout(() => scheduleTicketScale(), 80);
+    setTimeout(() => scheduleTicketScale(), 280);
 
     const previewBtn = document.getElementById('previewBtn');
     const printBtn = document.getElementById('printBtn');
@@ -469,16 +529,41 @@ async function downloadFullTicketImage() {
     if (!source || !source.childElementCount) {
         throw new Error('Aperçu ticket indisponible');
     }
-    if (typeof window.html2canvas !== 'function') {
-        throw new Error('Bibliothèque de capture non chargée');
+
+    const canvas = await html2canvasTicketSheet(source);
+    scheduleTicketScale();
+
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `ticket-${currentQRId || 'download'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function handleTicketPreviewModalDownload() {
+    if (!currentQRId) {
+        showToast('Erreur', 'Générez d\'abord un QR code', 'warning');
+        return;
+    }
+    downloadTicketPreviewModalPng()
+        .then(() => {
+            showToast('Succès', 'Ticket complet téléchargé !', 'success');
+        })
+        .catch((error) => {
+            console.error('Erreur:', error);
+            showToast('Erreur', error.message || 'Erreur lors du téléchargement du ticket', 'danger');
+        });
+}
+
+async function downloadTicketPreviewModalPng() {
+    const source = document.getElementById('ticketFullPreview');
+    if (!source || !source.childElementCount) {
+        throw new Error('Aperçu ticket indisponible');
     }
 
-    const canvas = await window.html2canvas(source, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-    });
+    const canvas = await html2canvasTicketSheet(source);
+    scheduleTicketScale();
 
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/png');
@@ -509,6 +594,28 @@ function handleReset() {
 
     const sheet = document.getElementById('inlineTicketSheet');
     if (sheet) sheet.innerHTML = '';
+    const scaleOuter = document.querySelector('.ticket-inline-scale-outer');
+    if (scaleOuter) {
+        scaleOuter.style.height = '';
+        scaleOuter.style.minHeight = '';
+        scaleOuter.style.maxWidth = '';
+        const clipEl = scaleOuter.querySelector('.ticket-scale-clip');
+        if (clipEl) {
+            clipEl.style.width = '';
+            clipEl.style.height = '';
+            clipEl.style.maxWidth = '';
+            clipEl.style.overflow = '';
+            clipEl.style.marginLeft = '';
+            clipEl.style.marginRight = '';
+        }
+        const st = scaleOuter.querySelector('.ticket-scale-stage');
+        if (st) {
+            st.style.transform = '';
+            st.style.transformOrigin = '';
+            st.style.width = '';
+            st.style.height = '';
+        }
+    }
 
     const previewBtn = document.getElementById('previewBtn');
     const printBtn = document.getElementById('printBtn');
