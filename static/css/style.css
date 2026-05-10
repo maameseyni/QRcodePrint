@@ -1504,7 +1504,7 @@ body.login-page {
     top: 50%;
     transform: translateY(-50%);
     z-index: 2;
-    color: #7f89a0;
+    color: #5d6d7e;
     pointer-events: none;
     line-height: 1;
 }
@@ -1517,7 +1517,7 @@ body.login-page {
     background: #e8edf6 !important;
     padding: 0.95rem 1rem 0.95rem 2.6rem !important;
     box-shadow: inset 6px 6px 12px #d1d8e5, inset -6px -6px 12px #ffffff !important;
-    color: #1a2745 !important;
+    color: #5d6d7e !important;
 }
 
 .login-page .neumo-input:focus {
@@ -1530,7 +1530,7 @@ body.login-page {
     border-radius: 12px 0 0 12px !important;
     background: #e8edf6 !important;
     box-shadow: inset 6px 6px 12px #d1d8e5, inset -3px -3px 10px #ffffff !important;
-    color: #1a2745 !important;
+    color: #5d6d7e !important;
     font-weight: 400 !important;
     padding: 0.95rem 0.65rem 0.95rem 0.85rem !important;
     font-size: 1rem;
@@ -1542,7 +1542,7 @@ body.login-page {
 }
 
 .login-page .phone-sn-inline-icon {
-    color: #7f89a0;
+    color: #5d6d7e;
     font-size: 1rem;
     line-height: 1;
     flex-shrink: 0;
@@ -1559,7 +1559,7 @@ body.login-page {
 }
 
 .login-page .neumo-input::placeholder {
-    color: #8a96ae;
+    color: #94a3b8;
 }
 
 /* Un seul œil : masquer le bouton natif Edge / Chromium (sinon doublon avec .neumo-eye-btn) */
@@ -1587,7 +1587,7 @@ body.login-page {
     z-index: 5;
     border: none;
     background: transparent;
-    color: #7f89a0;
+    color: #5d6d7e;
     padding: 0.35rem 0.45rem;
     min-width: 2.25rem;
     min-height: 2.25rem;
@@ -1606,8 +1606,8 @@ body.login-page {
 }
 
 .login-page .neumo-eye-btn:hover {
-    color: #1a2745;
-    background: rgba(26, 39, 69, 0.08);
+    color: #4a5568;
+    background: rgba(74, 85, 104, 0.1);
 }
 
 .login-page #login-pane .neumo-form {
@@ -1649,7 +1649,7 @@ body.login-page {
     justify-content: space-between;
     align-items: center;
     font-size: 0.82rem;
-    color: #7f89a0;
+    color: #94a3b8;
 }
 
 .login-page .neumo-check {
