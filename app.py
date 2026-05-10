@@ -712,11 +712,19 @@ def ticket_header_salle_block(sub_label, gym_name, address, phone, width=None):
     return out
 
 
-def ticket_client_info_lines(client_phone, who, email, client_address, width=None):
+def ticket_client_info_lines(
+    client_phone,
+    who,
+    email,
+    client_address,
+    width=None,
+    *,
+    include_client_phone=False,
+):
     """
     Bloc client : même principe que l'en-tête salle (colonnes lc / rc, valeurs alignées à droite).
-    Gauche : Nom, Numéro, Mail, Adresse (une ligne de libellé par champ, suites vides).
-    Droite : nom, n°, mail, adresse (coupures dans la colonne droite si besoin).
+    Gauche : Nom, [Numéro si demandé], Mail, Adresse.
+    Droite : valeurs alignées à droite (le numéro client n'est pas imprimé sur le ticket par défaut).
     """
     w = width or ticket_width()
     who = ((who or '').strip() or '-')
@@ -724,7 +732,7 @@ def ticket_client_info_lines(client_phone, who, email, client_address, width=Non
     email = ((email or '').strip() or '-')
     addr = ((client_address or '').strip() or '-')
 
-    rights_raw = [who, num, email, addr]
+    rights_raw = ([who, num, email, addr] if include_client_phone else [who, email, addr])
     rc = max(len(s) for s in rights_raw)
     rc = max(10, min(rc, w - 8))
     lc = w - rc
@@ -747,7 +755,8 @@ def ticket_client_info_lines(client_phone, who, email, client_address, width=Non
                 left_parts.append(' ' * lc)
 
     append_field('Nom:', who)
-    append_field('Numéro:', num)
+    if include_client_phone:
+        append_field('Numéro:', num)
     append_field('Mail:', email)
     append_field('Adresse:', addr)
 
@@ -878,6 +887,7 @@ def build_ticket_preview_parts(rec, expiration_date, owner_user=None, session_di
             g('client_email') or '-',
             g('client_address') or '',
             w,
+            include_client_phone=False,
         )
     )
 
@@ -961,6 +971,7 @@ def print_receipt_escpos(printer, qr_record, expiration_date, owner_user=None):
         client_email or '-',
         client_address or '',
         w,
+        include_client_phone=False,
     ):
         emit(line + '\n')
 
@@ -1371,6 +1382,8 @@ def create_qr():
             return jsonify({'success': False, 'error': 'Le nom est obligatoire'}), 400
         
         client_firstname = data.get('client_firstname', '').strip()
+        if not str(data.get('client_phone') or '').strip():
+            return jsonify({'success': False, 'error': 'Le téléphone est obligatoire'}), 400
         try:
             client_phone = normalize_sn_mobile_phone(data.get('client_phone', ''))
         except ValueError:
