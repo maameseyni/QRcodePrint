@@ -59,8 +59,8 @@ function measureTicketAvailHeightModal(outerEl) {
     const r = outerEl.getBoundingClientRect();
     let h = r.height > 48 ? Math.max(48, r.height - (handheld ? 20 : 12)) : Math.min(vh * 0.62, 720);
     if (handheld) {
-        /* Plus généreux : sinon s est souvent limité par la hauteur → ticket trop petit avec marges latérales */
-        h = Math.min(h, vh * (micro ? 0.5 : mini ? 0.54 : tiny ? 0.58 : narrow ? 0.62 : vw <= 600 ? 0.65 : 0.68));
+        /* Plafond ~64vh : un peu plus d’espace pour le ticket ; largeur gérée par scroll horizontal. */
+        h = Math.min(h, vh * (micro ? 0.54 : mini ? 0.57 : tiny ? 0.6 : narrow ? 0.62 : vw <= 600 ? 0.63 : 0.64));
     } else {
         h = Math.min(h, vh * 0.72);
     }
@@ -162,6 +162,9 @@ function applyProportionalTicketScale(outerEl) {
     const pad = micro ? 22 : mini ? 20 : tiny ? 18 : narrow ? 17 : handheld ? 16 : 10;
 
     const isModal = outerEl.classList.contains('ticket-modal-scale-outer');
+    /** Petite largeur : échelle pilotée par la hauteur seule → ticket plus lisible ; débordement horizontal dans .ticket-modal-scroll-band */
+    const modalScrollMobile = isModal && handheld;
+
     let availW;
     if (isModal) {
         availW = measureModalTicketAvailWidth(outerEl, pad);
@@ -178,12 +181,16 @@ function applyProportionalTicketScale(outerEl) {
         : measureTicketAvailHeightInline(outerEl);
 
     let s = 1;
-    if (w > 0 && h > 0 && availW > 0 && availH > 0) {
+    if (modalScrollMobile) {
+        if (w > 0 && h > 0 && availH > 0) {
+            s = Math.min(1, availH / h);
+        }
+    } else if (w > 0 && h > 0 && availW > 0 && availH > 0) {
         s = Math.min(1, availW / w, availH / h);
     } else if (w > 0 && availW > 0) {
         s = Math.min(1, availW / w);
     }
-    /* Modale : pas de réduction « sécurité » supplémentaire (largeur/hauteur déjà bornées). Carte QR : inchangé. */
+    /* Modale : pas de réduction « sécurité » supplémentaire. Carte QR : inchangé. */
     if (handheld && s > 0 && !isModal) {
         if (micro) s *= 0.8;
         else if (mini) s *= 0.84;
@@ -204,15 +211,25 @@ function applyProportionalTicketScale(outerEl) {
     if (clip) {
         clip.style.width = `${scaledW}px`;
         clip.style.height = `${scaledH}px`;
-        clip.style.maxWidth = '100%';
         clip.style.overflow = 'hidden';
-        clip.style.marginLeft = 'auto';
-        clip.style.marginRight = 'auto';
+        if (modalScrollMobile) {
+            clip.style.maxWidth = 'none';
+            clip.style.marginLeft = '0';
+            clip.style.marginRight = '0';
+        } else {
+            clip.style.maxWidth = '100%';
+            clip.style.marginLeft = 'auto';
+            clip.style.marginRight = 'auto';
+        }
     } else {
         outerEl.style.height = `${scaledH}px`;
         outerEl.style.minHeight = `${scaledH}px`;
     }
-    outerEl.style.maxWidth = '100%';
+    if (modalScrollMobile) {
+        outerEl.style.maxWidth = 'none';
+    } else {
+        outerEl.style.maxWidth = '100%';
+    }
 }
 
 /**

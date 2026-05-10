@@ -106,6 +106,15 @@ class Config:
         # Créer le dossier pour les QR codes s'il n'existe pas
         os.makedirs(Config.QR_CODE_DIR, exist_ok=True)
         app.permanent_session_lifetime = Config.PERMANENT_SESSION_LIFETIME
+        # Sans SECRET_KEY en env, Flask utilise une clé aléatoire régénérée à chaque processus :
+        # tout redémarrage (déploiement, cold start PaaS, scale) invalide les cookies de session.
+        if not (os.environ.get('SECRET_KEY') or '').strip():
+            app.logger.warning(
+                "SECRET_KEY absent des variables d'environnement : une clé aléatoire est "
+                "générée au démarrage. Les connexions sont perdues à chaque redémarrage du "
+                "serveur (déploiement, mise en veille puis réveil, etc.). Définissez SECRET_KEY "
+                "sur Render / votre hébergeur."
+            )
         # Render : HTTPS public ; cookies de session marqués Secure (évite envoi en clair).
         if os.environ.get('RENDER') or str(os.environ.get('FORCE_SECURE_COOKIES', '')).strip().lower() in (
             '1', 'true', 'yes', 'on',

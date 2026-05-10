@@ -289,6 +289,11 @@ textarea.form-control {
     margin-left: calc(-1 * var(--form-field-border-width));
 }
 
+#phonePrefixSn,
+.phone-sn-prefix {
+    font-weight: 400;
+}
+
 /* Liste déroulante : options au survol / focus cohérentes avec la charte (effet réel selon OS/navigateur) */
 select.form-select option {
     background-color: var(--bg-light);
@@ -1220,6 +1225,32 @@ html {
     max-height: min(72dvh, 620px);
 }
 
+/* Petit écran : ticket plus grand, défilement horizontal si besoin ; modale reste étroite */
+.ticket-modal-scroll-band {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+    .ticket-modal-scroll-band {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        padding-bottom: 2px;
+    }
+
+    .ticket-modal-scroll-band .ticket-modal-scale-outer {
+        max-width: none;
+        width: max-content;
+        max-height: min(64vh, 560px);
+        max-height: min(64dvh, 560px);
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
 /* Pied de modale ticket : boutons icônes uniquement (cible tactile ~46px) */
 .ticket-modal-footer-icons {
     gap: 0.65rem !important;
@@ -1491,6 +1522,40 @@ body.login-page {
 
 .login-page .neumo-input:focus {
     box-shadow: inset 5px 5px 10px #c9d0dd, inset -5px -5px 10px #ffffff !important;
+}
+
+/* Préfixe +221 (inscription / compléter profil) : icône + indicatif dans le même bloc que .neumo-input */
+.login-page .input-group > .input-group-text.phone-sn-prefix {
+    border: none !important;
+    border-radius: 12px 0 0 12px !important;
+    background: #e8edf6 !important;
+    box-shadow: inset 6px 6px 12px #d1d8e5, inset -3px -3px 10px #ffffff !important;
+    color: #1a2745 !important;
+    font-weight: 400 !important;
+    padding: 0.95rem 0.65rem 0.95rem 0.85rem !important;
+    font-size: 1rem;
+    line-height: 1.25;
+    align-items: center;
+    display: inline-flex;
+    flex-direction: row;
+    gap: 0.4rem;
+}
+
+.login-page .phone-sn-inline-icon {
+    color: #7f89a0;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.login-page .input-group:focus-within > .input-group-text.phone-sn-prefix {
+    box-shadow: inset 5px 5px 10px #c9d0dd, inset -3px -3px 8px #ffffff !important;
+}
+
+.login-page .input-group > .form-control.neumo-input.border-start-0 {
+    border-radius: 0 12px 12px 0 !important;
+    padding: 0.95rem 1rem 0.95rem 0.75rem !important;
 }
 
 .login-page .neumo-input::placeholder {

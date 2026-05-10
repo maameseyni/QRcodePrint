@@ -7,16 +7,6 @@ let lastTicketPreviewBefore = [];
 let lastTicketPreviewAfter = [];
 let ticketPreviewModalInstance = null;
 
-/** Préfixes autorisés sur les 2 premiers des 9 chiffres saisis (221 / indicatif exclus). */
-const SN_LOCAL_PREFIXES = ['77', '75', '76', '71', '78', '33', '70'];
-const SN_LOCAL_LENGTH = 9;
-const SN_PHONE_ERR = 'Veuillez saisir un bon numéro';
-
-function validateSenegalPhoneLocal(digits) {
-    if (!digits || digits.length !== SN_LOCAL_LENGTH) return false;
-    return SN_LOCAL_PREFIXES.includes(digits.slice(0, 2));
-}
-
 function getCSRFToken() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') : '';
@@ -260,9 +250,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('qrForm').addEventListener('submit', handleFormSubmit);
 
     const phoneLocal = document.getElementById('client_phone_local');
-    if (phoneLocal) {
+    if (phoneLocal && typeof filterSenegalPhoneLocalDigits === 'function') {
         phoneLocal.addEventListener('input', function () {
-            phoneLocal.value = phoneLocal.value.replace(/\D/g, '').slice(0, SN_LOCAL_LENGTH);
+            filterSenegalPhoneLocalDigits(phoneLocal);
         });
     }
 
@@ -366,8 +356,8 @@ async function handleFormSubmit(e) {
 
     const localEl = document.getElementById('client_phone_local');
     const localDigits = localEl ? localEl.value.replace(/\D/g, '').slice(0, SN_LOCAL_LENGTH) : '';
-    if (!validateSenegalPhoneLocal(localDigits)) {
-        showToast('Erreur', SN_PHONE_ERR, 'warning');
+    if (typeof validateSenegalPhoneLocal !== 'function' || !validateSenegalPhoneLocal(localDigits)) {
+        showToast('Erreur', typeof SN_PHONE_ERR !== 'undefined' ? SN_PHONE_ERR : 'Veuillez saisir un bon numéro', 'warning');
         return;
     }
 

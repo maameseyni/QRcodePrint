@@ -81,7 +81,7 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="client_phone_local" class="form-label">Téléphone</label>
                                     <div class="input-group">
-                                        <span class="input-group-text" id="phonePrefixSn" aria-hidden="true">+221</span>
+                                        <span class="input-group-text phone-sn-prefix" id="phonePrefixSn" aria-hidden="true">+221</span>
                                         <input type="tel" class="form-control" id="client_phone_local"
                                                maxlength="9" minlength="9" inputmode="numeric" pattern="[0-9]{9}"
                                                placeholder="" required autocomplete="tel-national"
@@ -225,7 +225,7 @@
 
     <!-- Modal aperçu ticket avant impression -->
     <div class="modal fade" id="ticketPreviewModal" tabindex="-1" aria-labelledby="ticketPreviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="ticketPreviewModalLabel"><i class="bi bi-receipt"></i> Aperçu du ticket complet</h5>
@@ -235,11 +235,13 @@
                     <p class="small text-muted text-center mb-3 mb-md-2">
                         Aperçu du ticket complet (80&nbsp;mm) — même ordre qu’à l’impression : texte, QR, puis pied de page.
                     </p>
-                    <div class="ticket-modal-scale-outer">
-                        <div class="ticket-scale-clip">
-                            <div class="ticket-scale-stage">
-                                <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique">
-                                    <!-- Rempli par main.js : texte + QR + texte -->
+                    <div class="ticket-modal-scroll-band">
+                        <div class="ticket-modal-scale-outer">
+                            <div class="ticket-scale-clip">
+                                <div class="ticket-scale-stage">
+                                    <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique">
+                                        <!-- Rempli par main.js : texte + QR + texte -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -272,6 +274,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ticket-scale.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

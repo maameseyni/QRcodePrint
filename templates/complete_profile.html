@@ -27,19 +27,41 @@
                             <input type="text" class="form-control neumo-input" name="gym_name" value="{{ user.get('gym_name','') }}" placeholder="Nom de la structure" required autocomplete="organization">
                         </div>
                     </div>
-                    <div class="col-6">
-                        <label class="form-label">Téléphone</label>
+                    {% set _ph = user.get('phone') or '' %}
+                    {% set _ph_loc = (_ph[4:] if _ph.startswith('+221') else '') %}
+                    {% set _ph2 = user.get('secondary_phone') or '' %}
+                    {% set _ph2_loc = (_ph2[4:] if _ph2.startswith('+221') else '') %}
+                    <div class="col-12 col-md-6">
                         <div class="neumo-input-wrap">
-                            <i class="bi bi-telephone neumo-input-icon" aria-hidden="true"></i>
-                            <input type="text" class="form-control neumo-input" name="phone" value="{{ user.get('phone','') }}" placeholder="Téléphone" required autocomplete="tel">
+                            <div class="input-group flex-grow-1">
+                                <span class="input-group-text phone-sn-prefix" id="completePhonePrefix">
+                                    <i class="bi bi-telephone phone-sn-inline-icon" aria-hidden="true"></i>
+                                    <span class="phone-sn-cc">+221</span>
+                                </span>
+                                <input type="tel" class="form-control neumo-input border-start-0" id="complete_phone_local"
+                                       maxlength="9" minlength="9" inputmode="numeric" pattern="[0-9]{9}"
+                                       value="{{ _ph_loc }}" placeholder="Téléphone" required autocomplete="tel-national"
+                                       aria-label="Téléphone"
+                                       aria-describedby="completePhonePrefix">
+                            </div>
                         </div>
+                        <input type="hidden" name="phone" id="complete_phone_hidden" value="">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label">2e numéro (optionnel)</label>
+                    <div class="col-12 col-md-6">
                         <div class="neumo-input-wrap">
-                            <i class="bi bi-telephone-plus neumo-input-icon" aria-hidden="true"></i>
-                            <input type="text" class="form-control neumo-input" name="secondary_phone" value="{{ user.get('secondary_phone','') }}" placeholder="2e numéro" autocomplete="tel">
+                            <div class="input-group flex-grow-1">
+                                <span class="input-group-text phone-sn-prefix" id="completeSecPrefix">
+                                    <i class="bi bi-telephone-plus phone-sn-inline-icon" aria-hidden="true"></i>
+                                    <span class="phone-sn-cc">+221</span>
+                                </span>
+                                <input type="tel" class="form-control neumo-input border-start-0" id="complete_secondary_local"
+                                       maxlength="9" inputmode="numeric" pattern="[0-9]{9}"
+                                       value="{{ _ph2_loc }}" placeholder="2e numéro (optionnel)" autocomplete="tel-national"
+                                       aria-label="Deuxième numéro (optionnel)"
+                                       aria-describedby="completeSecPrefix">
+                            </div>
                         </div>
+                        <input type="hidden" name="secondary_phone" id="complete_secondary_hidden" value="">
                     </div>
                     <div class="col-12">
                         <label class="form-label">Adresse</label>
@@ -53,5 +75,6 @@
             </form>
         </section>
     </main>
+    <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
 </body>
 </html>
