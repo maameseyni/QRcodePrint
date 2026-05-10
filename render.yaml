@@ -1,5 +1,5 @@
-# Runtime Python natif (pas Docker). Forcer 3.12 côté Render : Environment → PYTHON_VERSION = 3.12.8
-# + fichier runtime.txt / .python-version à la racine du repo.
+# Runtime Python natif (pas Docker). Render lit PYTHON_VERSION et/ou .python-version à la racine.
+# Doc : https://render.com/docs/python-version
 # Secrets : dashboard Render uniquement (pas sur GitHub).
 
 services:
