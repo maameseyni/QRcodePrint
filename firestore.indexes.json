@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,28 +1,34 @@
 """
 Script de démarrage pour l'application QR Code Print
 """
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from app import app, init_db, cleanup_expired_qr
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("🖨️  QR Code Print - Impression Thermique")
+    print("QR Code Print - Impression Thermique")
     print("=" * 50)
     
     # Initialisation de la base de données
-    print("\n📦 Initialisation de la base de données...")
+    print("\nInitialisation de la base de donnees...")
     init_db()
-    print("✅ Base de données initialisée")
+    print("Base de donnees initialisee")
     
     # Nettoyage initial des QR Codes expirés
-    print("🧹 Nettoyage des QR Codes expirés...")
+    print("Nettoyage des QR Codes expires...")
     cleanup_expired_qr()
-    print("✅ Nettoyage terminé")
+    print("Nettoyage termine")
     
-    print("\n🚀 Démarrage du serveur Flask...")
-    print("📍 Application accessible sur: http://localhost:5000")
-    print("📊 Dashboard: http://localhost:5000/dashboard")
-    print("\n💡 Appuyez sur Ctrl+C pour arrêter le serveur\n")
+    port = int(app.config.get('APP_PORT', 5055))
+    print("\nDemarrage du serveur Flask...")
+    print(f"Application accessible sur: http://localhost:{port}")
+    print(f"Accueil: http://localhost:{port}/")
+    print(f"Dashboard: http://localhost:{port}/dashboard")
+    print("\nAppuyez sur Ctrl+C pour arreter le serveur\n")
     
     # Lancer l'application
-    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=5000)
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=port)
 

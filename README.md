@@ -191,6 +191,8 @@ POST /api/print_qr/<qr_id>
 ### Lister les QR Codes
 ```
 GET /api/list_qr?filter=all  // ou "active", "expired"
+// Filtres optionnels : search=, ticket=, date_from=YYYY-MM-DD, date_to=YYYY-MM-DD
+// Export (admin, session) : GET /api/export_qr?format=csv|xlsx& (mêmes paramètres que list_qr)
 ```
 
 ### Supprimer un QR Code
@@ -281,9 +283,14 @@ Variables minimales à définir en production :
 
 - `ADMIN_PASSWORD` : obligatoire pour protéger le dashboard et les APIs admin
 - `ADMIN_USERNAME` : optionnel (défaut: `admin`)
+- `OPERATOR_PASSWORD` : compte « opérateur » (création / impression sans dashboard). Dès que **ce mot de passe ou** `ADMIN_PASSWORD` est défini, **toute l'application** (accueil, APIs, dashboard) exige une connexion. Laisser les deux vides uniquement en développement local.
+- `OPERATOR_USERNAME` : optionnel (défaut: `operator`)
+- `SESSION_HOURS` : durée de session en heures (défaut: `12`)
 - `SECRET_KEY` : clé Flask (session/CSRF), longue et aléatoire
 - `QR_SIGNATURE_KEY` : clé HMAC pour signer les QR codes, longue et aléatoire
 - `FLASK_DEBUG=0` : ne pas exposer le mode debug
+
+Connexion web : page `/login` (sessions Flask). Après connexion, chaque utilisateur accède au site selon son compte (admin : dashboard + tout ; opérateur : accueil et impression). Export CSV/Excel et filtres depuis le dashboard.
 
 ### Checklist sécurité production
 

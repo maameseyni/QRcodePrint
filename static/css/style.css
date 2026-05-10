@@ -17,11 +17,26 @@
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.04);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    /* Même fond que la page login (humeur bleu-gris doux) */
+    --app-page-background: radial-gradient(1200px 600px at 15% 10%, #f5f8ff 0%, #e8edf6 45%, #e3e9f3 100%);
+    /* Champs de formulaire (inputs + sélecteurs custom) : même gabarit */
+    --form-field-padding-y: 0.65rem;
+    --form-field-padding-x: 1rem;
+    --form-field-border-width: 1.5px;
+    --form-field-border-radius: 8px;
+    --form-field-font-size: 1rem;
+    --form-field-line-height: 1.5;
+    --form-field-min-height: calc(var(--form-field-line-height) * 1em + 2 * var(--form-field-padding-y) + 2 * var(--form-field-border-width));
+    /* Cartes jumelles page d’accueil (formulaire + ticket) */
+    --index-qr-card-radius: 16px;
+    --index-qr-card-radius-sm: 14px;
 }
 
 body {
-    background: #ffffff;
+    background: var(--app-page-background);
+    background-attachment: fixed;
     min-height: 100vh;
+    min-height: 100dvh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: #212529;
 }
@@ -37,6 +52,42 @@ body {
 body > .container.my-5,
 body > .container {
     margin-top: 1.5rem !important;
+}
+
+/* Page création QR : écart sous la navbar (réduit pour remonter un peu les deux cartes) */
+.index-qr-main-row {
+    margin-top: 0.65cm;
+}
+
+/* Les deux cartes (Créer un QR | Ticket & QR) : même rayon (la carte formulaire a overflow:visible pour les menus) */
+.index-qr-card {
+    border-radius: var(--index-qr-card-radius) !important;
+}
+
+.index-qr-card > .card-header:first-child {
+    border-top-left-radius: var(--index-qr-card-radius);
+    border-top-right-radius: var(--index-qr-card-radius);
+}
+
+.index-qr-card > .card-body:last-child {
+    border-bottom-left-radius: var(--index-qr-card-radius);
+    border-bottom-right-radius: var(--index-qr-card-radius);
+}
+
+@media (max-width: 768px) {
+    .index-qr-card {
+        border-radius: var(--index-qr-card-radius-sm) !important;
+    }
+
+    .index-qr-card > .card-header:first-child {
+        border-top-left-radius: var(--index-qr-card-radius-sm);
+        border-top-right-radius: var(--index-qr-card-radius-sm);
+    }
+
+    .index-qr-card > .card-body:last-child {
+        border-bottom-left-radius: var(--index-qr-card-radius-sm);
+        border-bottom-right-radius: var(--index-qr-card-radius-sm);
+    }
 }
 
 .custom-navbar {
@@ -58,9 +109,9 @@ body > .container {
     font-weight: 700 !important;
     letter-spacing: 0.5px;
     color: #1a2745 !important;
-    font-size: 1.35rem;
-    padding-top: 0.4rem !important;
-    padding-bottom: 0.4rem !important;
+    font-size: 1.45rem;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
     margin-right: 1rem;
 }
 
@@ -69,9 +120,9 @@ body > .container {
 }
 
 .custom-navbar .nav-link {
-    padding-top: 0.45rem !important;
-    padding-bottom: 0.45rem !important;
-    font-size: 1.05rem;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+    font-size: 1.12rem;
     margin: 0 0.5rem;
     color: #1a2745 !important;
     font-weight: 700 !important;
@@ -129,6 +180,11 @@ body > .container {
     transition: all 0.3s ease;
 }
 
+/* Menus .qrp-dropdown en position absolue : overflow:hidden de .card les masquait */
+.card:has(.qrp-dropdown) {
+    overflow: visible;
+}
+
 .card:hover {
     box-shadow: var(--shadow-lg) !important;
 }
@@ -178,11 +234,22 @@ body > .container {
 
 .form-control,
 .form-select {
-    border: 1.5px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.65rem 1rem;
-    transition: all 0.3s ease;
+    border: var(--form-field-border-width) solid var(--border-color);
+    border-radius: var(--form-field-border-radius);
+    padding: var(--form-field-padding-y) var(--form-field-padding-x);
+    font-size: var(--form-field-font-size);
+    line-height: var(--form-field-line-height);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     background-color: var(--bg-light);
+}
+
+input.form-control:not(textarea),
+select.form-select {
+    min-height: var(--form-field-min-height);
+}
+
+textarea.form-control {
+    min-height: 5rem;
 }
 
 .form-control:focus,
@@ -195,6 +262,116 @@ body > .container {
 .form-control:hover,
 .form-select:hover {
     border-color: #ced4da;
+}
+
+/* Préfixe téléphone : même hauteur et bordure que le champ */
+.input-group .input-group-text {
+    border: var(--form-field-border-width) solid var(--border-color);
+    padding: var(--form-field-padding-y) 0.75rem;
+    font-size: var(--form-field-font-size);
+    line-height: var(--form-field-line-height);
+    min-height: var(--form-field-min-height);
+    background-color: var(--bg-gray);
+    color: var(--dark-color);
+    font-weight: 600;
+}
+
+.input-group > .input-group-text:first-child {
+    border-radius: var(--form-field-border-radius) 0 0 var(--form-field-border-radius);
+}
+
+.input-group > .form-control:not(:first-child) {
+    border-radius: 0 var(--form-field-border-radius) var(--form-field-border-radius) 0;
+}
+
+.input-group > .form-control:not(:first-child),
+.input-group > .input-group-text:not(:first-child) {
+    margin-left: calc(-1 * var(--form-field-border-width));
+}
+
+/* Liste déroulante : options au survol / focus cohérentes avec la charte (effet réel selon OS/navigateur) */
+select.form-select option {
+    background-color: var(--bg-light);
+    color: var(--dark-color);
+}
+
+select.form-select option:hover,
+select.form-select option:focus {
+    background-color: var(--primary-dark) !important;
+    color: #ffffff !important;
+}
+
+select.form-select option:checked {
+    background-color: var(--primary-color) !important;
+    color: #ffffff !important;
+}
+
+/* Menus Bootstrap (remplacement des <select>) : même gabarit que .form-control */
+.qrp-dropdown-toggle.btn {
+    border: var(--form-field-border-width) solid var(--border-color);
+    border-radius: var(--form-field-border-radius);
+    padding: var(--form-field-padding-y) var(--form-field-padding-x);
+    min-height: var(--form-field-min-height);
+    background-color: var(--bg-light);
+    font-size: var(--form-field-font-size);
+    line-height: var(--form-field-line-height);
+    font-weight: 400;
+    letter-spacing: normal;
+    color: var(--dark-color);
+    box-shadow: none;
+}
+
+.qrp-dropdown-toggle:hover,
+.qrp-dropdown-toggle:focus,
+.qrp-dropdown-toggle.show {
+    border-color: var(--primary-color);
+    background-color: var(--bg-light);
+    color: var(--dark-color);
+}
+
+.qrp-dropdown-toggle:focus-visible {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(26, 39, 69, 0.15);
+    outline: none;
+}
+
+.qrp-dropdown-toggle.dropdown-toggle::after {
+    margin-left: auto;
+    vertical-align: middle;
+}
+
+.qrp-dropdown-toggle.btn:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.qrp-dropdown-menu .dropdown-item {
+    color: var(--dark-color);
+}
+
+.qrp-dropdown-menu .dropdown-item:hover,
+.qrp-dropdown-menu .dropdown-item:focus {
+    background-color: var(--primary-dark);
+    color: #ffffff;
+}
+
+.qrp-dropdown-menu .dropdown-item:active {
+    background-color: var(--primary-color);
+    color: #ffffff;
+}
+
+/* Même apparence blanche quand le navigateur auto-remplit (sinon fond bleu/jaune) */
+input.form-control:-webkit-autofill,
+input.form-control:-webkit-autofill:hover,
+input.form-control:-webkit-autofill:focus,
+input.form-control:-webkit-autofill:active,
+select.form-select:-webkit-autofill,
+select.form-select:-webkit-autofill:hover,
+select.form-select:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-light) inset !important;
+    box-shadow: 0 0 0 1000px var(--bg-light) inset !important;
+    -webkit-text-fill-color: #212529;
+    transition: background-color 5000s ease-in-out 0s;
 }
 
 /* Buttons */
@@ -289,6 +466,347 @@ body > .container {
     transform: scale(1.01);
 }
 
+/* Carte du tableau : ne pas couper le contenu des lignes au survol */
+.card.card-qr-table,
+.card.card-qr-table .card-body {
+    overflow: visible !important;
+}
+
+/* Dashboard liste QR : hauteur limitée + défilement ; en-têtes collants */
+.table-responsive-qr-dashboard {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: min(60vh, 520px);
+}
+
+.table-qr-dashboard {
+    overflow: visible !important;
+}
+
+.table-qr-dashboard.table-hover tbody tr {
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.table-qr-dashboard.table-hover tbody tr:hover {
+    transform: none;
+    background-color: rgba(26, 39, 69, 0.08) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    position: relative;
+    z-index: 5;
+}
+
+.table-qr-dashboard.table-hover tbody tr:hover td {
+    white-space: normal !important;
+    word-break: break-word;
+    vertical-align: top;
+}
+
+/* Alignements tableau dashboard : Actions / Statut centrés sous leurs en-têtes */
+.table-qr-dashboard thead th.col-qr-actions,
+.table-qr-dashboard thead th.col-qr-statut {
+    text-align: center !important;
+}
+
+.table-qr-dashboard thead th.text-start {
+    text-align: left !important;
+}
+
+.table-qr-dashboard tbody td.td-qr-actions,
+.table-qr-dashboard tbody td.td-qr-statut {
+    text-align: center !important;
+    vertical-align: middle;
+}
+
+.table-qr-dashboard tbody td.td-qr-actions .btn-group {
+    justify-content: center;
+}
+
+.table-qr-dashboard.table-hover tbody tr:hover td.td-qr-actions,
+.table-qr-dashboard.table-hover tbody tr:hover td.td-qr-statut {
+    vertical-align: middle !important;
+}
+
+.table-qr-dashboard thead th.col-qr-actions {
+    min-width: 8.5rem;
+    white-space: nowrap;
+}
+
+.table-qr-dashboard thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #fff;
+    box-shadow: 0 1px 0 var(--border-color);
+}
+
+/* —— Pagination dashboard (liste QR) : barre moderne —— */
+.qr-pagination-nav {
+    border-top: 1px solid var(--border-color);
+}
+
+.qr-pagination-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    width: 100%;
+}
+
+.qr-pagination-summary {
+    font-size: 0.875rem;
+    color: #5c6470;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-align: center;
+}
+
+.qr-pagination-summary strong {
+    color: var(--primary-dark);
+    font-weight: 700;
+}
+
+.qr-pagination-toolbar {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    background: linear-gradient(180deg, #f8f9fc 0%, #f0f2f7 100%);
+    border: 1px solid rgba(26, 39, 69, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(26, 39, 69, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.qr-pagination-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    background: #fff;
+    color: var(--primary-dark);
+    font-size: 1.15rem;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(26, 39, 69, 0.1);
+    transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.qr-pagination-arrow:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(26, 39, 69, 0.2);
+    transform: translateY(-1px);
+}
+
+.qr-pagination-arrow:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.qr-pagination-arrow:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: #e9ecef;
+    color: #adb5bd;
+    box-shadow: none;
+    transform: none;
+}
+
+.qr-pagination-pages {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.5rem;
+    padding: 0 0.15rem;
+}
+
+.qr-pagination-pages .page-item {
+    margin: 0;
+    list-style: none;
+}
+
+.qr-pagination-pages .page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    height: 2.4rem;
+    padding: 0 0.55rem;
+    border: 1.5px solid rgba(26, 39, 69, 0.12);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--primary-dark);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.qr-pagination-pages .page-item:not(.active) .page-link:hover {
+    background: rgba(26, 39, 69, 0.07);
+    border-color: var(--primary-dark);
+    color: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(26, 39, 69, 0.1);
+}
+
+.qr-pagination-pages .page-item.active .page-link {
+    background: linear-gradient(145deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    border-color: var(--primary-dark);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(26, 39, 69, 0.25);
+    transform: translateY(-1px);
+}
+
+.qr-pagination-pages .page-item.active .page-link:hover {
+    background: linear-gradient(145deg, #1e2c4d 0%, #0f1624 100%);
+    color: #fff;
+    border-color: #0f1624;
+}
+
+.qr-pagination-compact {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.4rem;
+    padding: 0 1rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--primary-dark);
+    background: #fff;
+    border-radius: 999px;
+    border: 1.5px dashed rgba(26, 39, 69, 0.18);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.qr-pagination-pages .page-link:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(26, 39, 69, 0.12);
+}
+
+/* —— Dashboard (page dédiée) —— */
+.page-dashboard .dashboard-page-title {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--primary-dark);
+}
+
+.page-dashboard .dashboard-title-icon {
+    color: var(--primary-dark);
+    margin-right: 0.35rem;
+}
+
+.page-dashboard .dashboard-page-subtitle {
+    max-width: 26rem;
+}
+
+.dashboard-filters-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f9fafc 100%);
+    border-radius: 16px !important;
+    box-shadow: 0 4px 24px rgba(26, 39, 69, 0.07) !important;
+}
+
+.dashboard-filters-heading {
+    color: var(--primary-dark);
+}
+
+.dashboard-filter-chips-wrap {
+    padding: 0.65rem 0.9rem;
+    background: rgba(26, 39, 69, 0.045);
+    border-radius: 12px;
+    border: 1px solid rgba(26, 39, 69, 0.07);
+}
+
+.dashboard-filter-chips-label {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.dashboard-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.7rem 0.38rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    background: #fff;
+    border: 1px solid rgba(26, 39, 69, 0.14);
+    border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-filter-chip:hover {
+    background: rgba(26, 39, 69, 0.06);
+    border-color: rgba(26, 39, 69, 0.35);
+    box-shadow: 0 2px 6px rgba(26, 39, 69, 0.08);
+}
+
+.dashboard-filter-chip:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.dashboard-filter-chip .bi-x-lg {
+    font-size: 0.72rem;
+    opacity: 0.8;
+}
+
+.dashboard-clear-filters {
+    font-weight: 600;
+    color: var(--primary-dark) !important;
+}
+
+.dashboard-clear-filters:hover {
+    text-decoration: underline !important;
+}
+
+.table-qr-dashboard tbody tr:nth-child(even) {
+    background-color: rgba(248, 249, 252, 0.75);
+}
+
+.table-qr-dashboard.table-hover tbody tr:nth-child(even):hover {
+    background-color: rgba(26, 39, 69, 0.08) !important;
+}
+
+.table-qr-dashboard thead th.col-qr-client,
+.table-qr-dashboard tbody td:nth-child(2) {
+    min-width: 9rem;
+}
+
+.table-qr-dashboard thead th.col-qr-phone,
+.table-qr-dashboard tbody td:nth-child(3) {
+    min-width: 7.5rem;
+}
+
+.table-qr-dashboard thead th.col-qr-ticketnum,
+.table-qr-dashboard tbody td:nth-child(4) {
+    min-width: 5.5rem;
+}
+
+.card.card-qr-table > .card-header.bg-primary {
+    border-bottom: none;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+/* Boutons d'actions : pas de marges latérales qui décentrent le groupe sous l'en-tête */
+.table-qr-dashboard .btn-group .btn {
+    margin: 0;
+}
+
 /* Status Badges */
 .badge {
     padding: 0.5em 0.75em;
@@ -301,10 +819,27 @@ body > .container {
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
-/* Loading Spinner */
+/* Loading Spinner (moitié de l’ancien 3rem) */
 .spinner-border {
-    width: 3rem;
-    height: 3rem;
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.spinner-border.spinner-border-sm {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-width: 0.15em;
+}
+
+/* Spinner du bouton « Générer le QR Code » : un peu plus grand que spinner-border-sm */
+.spinner-border.spinner-generate {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-width: 0.2em;
+}
+
+.spinner-dashboard {
+    color: #1a2745 !important;
 }
 
 /* Printer Status */
@@ -442,13 +977,12 @@ html {
     scroll-behavior: smooth;
 }
 
-/* QR Code Display Box */
-.qr-display-card {
-    min-height: 600px;
-}
+/* QR Code : même hauteur que la carte formulaire (flex sur colonnes) */
 
-#qrDisplayCard {
-    min-height: 550px;
+.qr-empty-icon {
+    font-size: 5rem;
+    color: #e9ecef;
+    margin-bottom: 1.5rem;
 }
 
 #qrEmptyState {
@@ -463,8 +997,562 @@ html {
 /* Responsive pour les deux colonnes */
 @media (max-width: 991px) {
     #qrDisplayCard {
-        min-height: auto;
-        padding: 2rem 0;
+        padding: 1rem 0 1.5rem;
+    }
+}
+
+/* Aperçu ticket (modal) — bande 80 mm, style reçu caisse */
+.ticket-preview-pre {
+    font-family: ui-monospace, "Cascadia Code", Consolas, "Lucida Console", monospace;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+    background: linear-gradient(180deg, #fffef9 0%, #f5f2eb 100%);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    padding: 1.1rem 1.25rem;
+    max-height: 420px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Feuille ticket continu : en-tête + corps + QR + pied (comme l’impression) */
+.ticket-receipt-sheet {
+    max-width: 24rem;
+    max-height: min(70vh, 640px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #fffef9 0%, #f0ebe3 100%);
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 0.35rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.ticket-receipt-sheet .ticket-preview-pre.ticket-preview-fragment {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    max-height: none;
+    padding: 1rem 1.15rem;
+}
+
+.ticket-preview-qr-slot {
+    padding: 0.65rem 1rem 0.75rem;
+    margin: 0;
+    text-align: center;
+    border-top: 1px solid #ececec;
+    border-bottom: none;
+    background: #ffffff;
+}
+
+.ticket-preview-qr-img {
+    max-width: 200px;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* Ticket dans la carte droite : occupe la boîte, défilement interne */
+#qrDisplayCard {
+    min-height: 0;
+}
+
+.qr-result-with-ticket {
+    min-height: 0;
+}
+
+.ticket-receipt-sheet.ticket-on-qr-box {
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    max-height: min(58vh, 560px);
+    flex: 1 1 auto;
+}
+
+/* Style « reçu » type ticket blanc (aperçu écran) — largeur ~nombre de caractères du ticket */
+.ticket-receipt-sheet.ticket-receipt-modern {
+    background: #ffffff;
+    color: #1a1a1a;
+    border: 1px solid #e5e5e5;
+    border-radius: 3px;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.06),
+        0 10px 28px rgba(0, 0, 0, 0.08);
+    max-width: min(56ch, calc(100vw - 2rem));
+    margin-left: auto;
+    margin-right: auto;
+    --ticket-x-pad: 1.48rem;
+    --ticket-text-inset: 0.62rem;
+    --ticket-inner-width: calc(100% - (var(--ticket-x-pad) * 2));
+}
+
+.ticket-receipt-sheet.ticket-on-qr-box.ticket-receipt-modern {
+    max-width: min(56ch, calc(100% - 0.25rem));
+    width: 100%;
+}
+
+.ticket-receipt-modern .ticket-preview-pre.ticket-preview-fragment {
+    background: #ffffff;
+    font-family: ui-monospace, "Roboto Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+    color: #242424;
+    width: var(--ticket-inner-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0.65rem var(--ticket-text-inset);
+    margin-top: 0;
+    margin-bottom: 0;
+    -webkit-font-smoothing: antialiased;
+    white-space: pre;
+}
+
+.ticket-receipt-modern .ticket-preview-title {
+    font-family: ui-monospace, "Roboto Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 1.18rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-align: center;
+    width: var(--ticket-inner-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.05rem var(--ticket-text-inset) 0.4rem;
+    background: #ffffff;
+}
+
+.ticket-receipt-modern .ticket-preview-pre.ticket-preview-fragment:first-of-type {
+    padding-top: 0.55rem;
+}
+
+.ticket-receipt-modern .ticket-preview-pre.ticket-preview-fragment:last-of-type {
+    padding-bottom: 1.15rem;
+}
+
+.ticket-receipt-modern .ticket-preview-qr-slot {
+    background: #ffffff;
+    border-top: 1px solid #e8e8e8;
+    border-bottom: none;
+    padding: 0.5rem 1rem 0.65rem;
+}
+
+.ticket-receipt-modern .ticket-preview-qr-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.65rem;
+    background: #ffffff;
+    border-top: 1px solid #e8e8e8;
+    width: var(--ticket-inner-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0.58rem var(--ticket-text-inset) 0.62rem;
+}
+
+.ticket-receipt-modern .ticket-preview-qr-row .ticket-preview-qr-slot {
+    flex: 0 0 auto;
+    border-top: none;
+    padding: 0;
+    margin-left: -0.42rem;
+}
+
+.ticket-receipt-modern .ticket-preview-pre.ticket-preview-fragment.ticket-preview-side {
+    flex: 0 0 auto;
+    width: 15ch;
+    white-space: pre;
+    padding: 0;
+    margin-left: auto;
+    display: block;
+    text-align: right;
+    transform: translateX(-0.5cm);
+}
+
+.ticket-receipt-modern .ticket-preview-pre.ticket-preview-fragment.ticket-preview-bottom {
+    border-top: 1px solid #e8e8e8;
+}
+
+.ticket-receipt-modern .ticket-preview-qr-img {
+    display: block;
+    margin-left: 0;
+    margin-right: auto;
+    max-width: min(220px, 85%);
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* Page connexion : plein écran + centrage fiable (évite les conflits body global / h-100) */
+html.login-page {
+    height: 100%;
+}
+
+body.login-page {
+    margin: 0 !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    background: var(--app-page-background) !important;
+    background-attachment: fixed !important;
+    overflow-x: hidden;
+}
+
+.login-page-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(1rem, 3vw, 2.5rem);
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.login-page-card-wrap {
+    width: 100%;
+    max-width: 760px;
+    margin: auto;
+    flex-shrink: 0;
+}
+
+.login-page-card .card-header {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+.login-page-card .card-body {
+    padding: 2.5rem 2.75rem;
+}
+
+@media (min-width: 576px) {
+    .login-page-card .card-body {
+        padding: 3rem 3.25rem;
+    }
+}
+
+/* ===== Login Neumorphism (dark-blue accent) — fond = --app-page-background ===== */
+
+.login-page .login-page-shell {
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.6rem;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.login-page .neumo-card {
+    width: 100%;
+    max-width: 760px;
+    background: #e8edf6;
+    border-radius: 22px;
+    padding: 3.2rem 3.1rem 2.7rem;
+    box-shadow: 14px 14px 28px #c9d0dd, -14px -14px 28px #ffffff;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+}
+
+.login-page .neumo-avatar {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1a2745;
+    font-size: 1.5rem;
+    background: linear-gradient(145deg, #eef2fa, #dde4f0);
+    box-shadow: 8px 8px 16px #c9d0dd, -8px -8px 16px #ffffff;
+}
+
+.login-page .neumo-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1a2745;
+    margin-bottom: 0.1rem;
+}
+
+.login-page .neumo-subtitle {
+    color: #7d879a;
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.login-page .neumo-tabs {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+    margin-bottom: 1.1rem !important;
+    padding: 0.2rem;
+}
+
+.login-page .neumo-tabs .nav-link {
+    border: none;
+    color: #6d7892;
+    border-radius: 999px;
+    padding: 0.45rem 0.95rem;
+    background: #e8edf6;
+    box-shadow: inset 4px 4px 9px #d1d8e5, inset -4px -4px 9px #ffffff;
+    font-weight: 600;
+    min-width: 130px;
+    transition: all 0.2s ease;
+}
+
+.login-page .neumo-tabs .nav-link.active {
+    color: #fff;
+    background: #1a2745;
+    box-shadow: 6px 6px 14px #bac3d3, -6px -6px 14px #ffffff;
+}
+
+.login-page .neumo-input-wrap {
+    position: relative;
+}
+
+.login-page .neumo-input-icon {
+    position: absolute;
+    left: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    color: #7f89a0;
+    pointer-events: none;
+    line-height: 1;
+}
+
+.login-page .neumo-input {
+    position: relative;
+    z-index: 0;
+    border: none !important;
+    border-radius: 12px !important;
+    background: #e8edf6 !important;
+    padding: 0.95rem 1rem 0.95rem 2.6rem !important;
+    box-shadow: inset 6px 6px 12px #d1d8e5, inset -6px -6px 12px #ffffff !important;
+    color: #1a2745 !important;
+}
+
+.login-page .neumo-input:focus {
+    box-shadow: inset 5px 5px 10px #c9d0dd, inset -5px -5px 10px #ffffff !important;
+}
+
+.login-page .neumo-input::placeholder {
+    color: #8a96ae;
+}
+
+/* Un seul œil : masquer le bouton natif Edge / Chromium (sinon doublon avec .neumo-eye-btn) */
+.login-page input.neumo-input[type="password"]::-ms-reveal,
+.login-page input.neumo-input[type="password"]::-ms-clear {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+.login-page input.neumo-input[type="password"]::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+
+.login-page .neumo-eye-btn {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
+    border: none;
+    background: transparent;
+    color: #7f89a0;
+    padding: 0.35rem 0.45rem;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+/* Le clic doit cibler le <button>, pas l’icône (sinon le toggle ne part pas sur certains navigateurs) */
+.login-page .neumo-eye-btn i {
+    pointer-events: none;
+}
+
+.login-page .neumo-eye-btn:hover {
+    color: #1a2745;
+    background: rgba(26, 39, 69, 0.08);
+}
+
+.login-page #login-pane .neumo-form {
+    margin-top: 0.95rem;
+}
+
+.login-page .neumo-submit-btn {
+    margin-top: 1.1rem !important;
+}
+
+.login-page .neumo-signup-form .col-6 {
+    position: relative;
+}
+
+.login-page .neumo-form .row {
+    row-gap: 1rem !important;
+}
+
+.login-page .neumo-signup-form .row {
+    margin-bottom: 0.95rem;
+}
+
+/* Compléter le profil : espace net entre le dernier champ et Enregistrer */
+.login-page .neumo-complete-profile-form .row {
+    margin-bottom: 0.35rem;
+}
+
+.login-page .neumo-complete-profile-submit {
+    margin-top: 2.5rem !important;
+}
+
+/* Espace pour le bouton œil (connexion + inscription) */
+.login-page .neumo-input-wrap:has(.neumo-eye-btn) .neumo-input {
+    padding-right: 2.75rem !important;
+}
+
+.login-page .neumo-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.82rem;
+    color: #7f89a0;
+}
+
+.login-page .neumo-check {
+    display: flex;
+    align-items: center;
+}
+
+.login-page .neumo-check .form-check-input {
+    border-color: #a8b4cc;
+}
+
+.login-page .neumo-check .form-check-input:checked {
+    background-color: #1a2745;
+    border-color: #1a2745;
+}
+
+.login-page .neumo-check .form-check-input:focus {
+    border-color: #1a2745;
+    box-shadow: 0 0 0 0.2rem rgba(26, 39, 69, 0.25);
+}
+
+.login-page .neumo-link {
+    text-decoration: none;
+    color: #5e6a86;
+}
+
+.login-page .neumo-btn {
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1a2745 0%, #141d32 100%);
+    color: #fff;
+    font-weight: 700;
+    padding: 0.75rem 1rem;
+    box-shadow: 10px 10px 18px #c2cada, -10px -10px 18px #ffffff;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.login-page .neumo-btn:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+}
+
+.login-page .neumo-divider {
+    margin: 1.2rem 0 0.9rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: #95a0b8;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.login-page .neumo-divider::before,
+.login-page .neumo-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #cfd7e6;
+}
+
+.login-page .neumo-socials {
+    display: flex;
+    gap: 0.8rem;
+    justify-content: center;
+}
+
+.login-page .neumo-social-btn {
+    border: none;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    color: #6e7891;
+    background: #e8edf6;
+    box-shadow: 7px 7px 14px #c9d0dd, -7px -7px 14px #ffffff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-page .neumo-social-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 9px 9px 18px #c4cbda, -9px -9px 18px #ffffff;
+}
+
+.login-page .neumo-google-btn {
+    padding: 0.45rem 1rem;
+    width: auto;
+    font-weight: 600;
+    color: #49546f;
+}
+
+.login-page .google-logo {
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+    .login-page .login-page-shell {
+        align-items: center;
+        padding: 1.15rem 0.9rem 1.4rem;
+    }
+
+    .login-page .neumo-card {
+        width: 100%;
+        max-width: 100%;
+        padding: 2.1rem 1.45rem 1.7rem;
+        margin: 0;
+    }
+
+    .login-page .neumo-signup-form .col-6,
+    .login-page .neumo-signup-form .col-12 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
     }
 }
 

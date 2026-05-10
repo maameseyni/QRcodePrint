@@ -2,110 +2,326 @@
 Application Flask pour génération et impression de QR Codes thermiques
 """
 import os
-import sqlite3
+import csv
+import secrets
+import textwrap
 import uuid
 import hashlib
 import hmac
 import json
+import threading
+import time
 from datetime import datetime, timedelta
 from functools import wraps
-from pathlib import Path
+from io import BytesIO, StringIO
 
-from flask import Flask, render_template, request, jsonify, send_file, abort, Response
-from flask_wtf.csrf import CSRFProtect
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from flask import (
+    Flask,
+    g,
+    render_template,
+    request,
+    jsonify,
+    send_file,
+    abort,
+    session,
+    redirect,
+    url_for,
+)
+from authlib.integrations.flask_client import OAuth
+from flask_wtf.csrf import CSRFError, CSRFProtect
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from escpos.printer import Usb, Network, Serial
 from escpos.exceptions import USBNotFoundError
+from google.api_core.exceptions import GoogleAPICallError, PermissionDenied
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
 import base64
-from io import BytesIO
 
 from config import Config
+from services.datastore import FirestoreDataStore, QueryFilters
 
 app = Flask(__name__)
 app.config.from_object(Config)
 Config.init_app(app)
+
+# Derrière Render / reverse proxy : URLs externes HTTPS et OAuth corrects (X-Forwarded-*).
+if (
+    os.environ.get('RENDER')
+    or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    or str(os.environ.get('TRUST_PROXY_HEADERS', '')).strip().lower() in ('1', 'true', 'yes', 'on')
+):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 csrf = CSRFProtect(app)
+store = FirestoreDataStore(app.config)
+
+oauth = OAuth(app)
+if app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'):
+    oauth.register(
+        name='google',
+        client_id=app.config['GOOGLE_CLIENT_ID'],
+        client_secret=app.config['GOOGLE_CLIENT_SECRET'],
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'},
+    )
 
 
-def check_admin_auth():
-    """Vérifie l'authentification admin HTTP Basic."""
-    expected_password = app.config.get('ADMIN_PASSWORD')
-    if not expected_password:
-        app.logger.warning("ADMIN_PASSWORD non défini: routes admin non protégées.")
-        return True
+def _google_oauth_configured() -> bool:
+    return bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'))
 
-    auth = request.authorization
-    if not auth:
+
+def jsonify_firestore_error(operation: str, exc: GoogleAPICallError):
+    """Réponse JSON homogène pour les erreurs d'API Firestore (évite un 500 « Erreur interne »)."""
+    app.logger.warning("Firestore %s: %s", operation, exc)
+    msg = (str(exc) or "").strip() or type(exc).__name__
+    if isinstance(exc, PermissionDenied) or "insufficient permissions" in msg.lower():
+        detail = (
+            "Firestore refuse l'accès. Vérifiez les rôles IAM du compte de service "
+            "(rôle « Cloud Datastore User » sur le projet défini par FIRESTORE_PROJECT_ID)."
+        )
+    else:
+        detail = f"Firestore ({type(exc).__name__}): {msg}"
+    return jsonify({"success": False, "error": detail}), 503
+
+
+def _safe_next_url(nxt):
+    if not nxt or not isinstance(nxt, str):
+        return None
+    nxt = nxt.strip()
+    if not nxt.startswith('/') or nxt.startswith('//'):
+        return None
+    return nxt
+
+
+def site_auth_required():
+    """Connexion obligatoire en mode multi-comptes."""
+    return True
+
+
+def admin_login_required():
+    """Compatibilité template: authentification applicative toujours active."""
+    return True
+
+
+def _legacy_admin_profile():
+    return {
+        'full_name': app.config.get('ADMIN_FULL_NAME') or 'Administrateur',
+        'gym_name': app.config.get('ADMIN_GYM_NAME') or 'Salle principale',
+        'phone': app.config.get('ADMIN_PHONE') or '',
+        'address': app.config.get('ADMIN_ADDRESS') or '',
+    }
+
+
+def ensure_legacy_admin_user():
+    """Crée/met à jour le compte historique comme utilisateur standard."""
+    username = (app.config.get('ADMIN_USERNAME') or 'admin').strip().lower()
+    admin_pass = app.config.get('ADMIN_PASSWORD')
+    if not username or not admin_pass:
+        return
+    existing = store.get_user_by_username(username)
+    profile = _legacy_admin_profile()
+    if not existing:
+        user_id = store.create_user({
+            'id': str(uuid.uuid4()),
+            'username': username,
+            'password_hash': generate_password_hash(admin_pass),
+            'role': 'user',
+            'full_name': profile['full_name'],
+            'gym_name': profile['gym_name'],
+            'phone': profile['phone'],
+            'address': profile['address'],
+            'is_active': True,
+            'created_at': datetime.utcnow().isoformat(),
+            'source': 'legacy-env',
+        })
+        store.attach_owner_to_unowned_qr(user_id)
+        return
+    updates = {}
+    if str(existing.get('role') or '').strip().lower() in ('admin', 'operator', ''):
+        updates['role'] = 'user'
+    for key in ('full_name', 'gym_name', 'phone', 'address'):
+        if not str(existing.get(key) or '').strip() and str(profile[key] or '').strip():
+            updates[key] = profile[key]
+    if updates:
+        store.update_user(existing['id'], updates)
+    _maybe_attach_owner_to_unowned_qr(existing['id'])
+
+
+def ensure_superadmin_user():
+    """Compte superadmin global (optionnel, piloté via .env)."""
+    username = (app.config.get('SUPERADMIN_USERNAME') or '').strip().lower()
+    password = app.config.get('SUPERADMIN_PASSWORD')
+    if not username or not password:
+        return
+    existing = store.get_user_by_username(username)
+    if not existing:
+        store.create_user({
+            'id': str(uuid.uuid4()),
+            'username': username,
+            'password_hash': generate_password_hash(password),
+            'role': 'superadmin',
+            'full_name': app.config.get('SUPERADMIN_FULL_NAME') or 'Super Administrateur',
+            'gym_name': 'Plateforme',
+            'phone': app.config.get('SUPERADMIN_PHONE') or '',
+            'address': app.config.get('SUPERADMIN_ADDRESS') or '',
+            'is_active': True,
+            'created_at': datetime.utcnow().isoformat(),
+            'source': 'superadmin-env',
+        })
+        return
+    if str(existing.get('role') or '').strip().lower() != 'superadmin':
+        store.update_user(existing['id'], {'role': 'superadmin'})
+
+
+def try_login(username, password):
+    """Retourne le profil utilisateur Firestore si authentifié, sinon None."""
+    if not username or password is None:
+        return None
+    user = store.get_user_by_username((username or '').strip().lower())
+    if not user:
+        return None
+    if not bool(user.get('is_active', True)):
+        return None
+    pwd_hash = str(user.get('password_hash') or '')
+    if not pwd_hash:
+        return None
+    if check_password_hash(pwd_hash, password):
+        return user
+    return None
+
+
+def _current_owner_id():
+    return str(session.get('user_id') or '')
+
+
+def _current_user():
+    """Un seul aller-retour Firestore par requête HTTP (décorateurs + context_processor)."""
+    if '_qrprint_user' in g:
+        return g._qrprint_user
+    uid = _current_owner_id()
+    if not uid:
+        g._qrprint_user = None
+        return None
+    user = store.get_user_by_id(uid)
+    if not user:
+        g._qrprint_user = None
+        return None
+    if not bool(user.get('is_active', True)):
+        g._qrprint_user = None
+        return None
+    g._qrprint_user = user
+    return user
+
+
+def _is_authenticated():
+    return _current_user() is not None
+
+
+def _profile_complete(user: dict) -> bool:
+    if not user:
         return False
-
-    expected_username = app.config.get('ADMIN_USERNAME', 'admin')
-    return (
-        hmac.compare_digest(auth.username or '', expected_username)
-        and hmac.compare_digest(auth.password or '', expected_password)
-    )
-
-
-def admin_auth_required():
-    """Retourne une réponse 401 pour déclencher l'auth HTTP Basic."""
-    return Response(
-        'Authentification requise',
-        401,
-        {'WWW-Authenticate': 'Basic realm="Dashboard Admin"'}
-    )
+    # Pour les comptes salle (user), ces champs sont obligatoires.
+    role = str(user.get('role') or '').strip().lower()
+    if role == 'superadmin':
+        return True
+    required = [
+        str(user.get('gym_name') or '').strip(),
+        str(user.get('phone') or '').strip(),
+        str(user.get('address') or '').strip(),
+    ]
+    return all(required)
 
 
-def require_admin(func):
-    """Décorateur pour protéger les routes administrateur."""
+def redirect_to_login():
+    if session.get('user_id') and not _is_authenticated():
+        session.clear()
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Authentification requise', 'auth_required': True}), 401
+    nxt = request.path if request.method == 'GET' else None
+    return redirect(url_for('login', next=nxt or ''))
+
+
+def require_admin_session(func):
+    """Dashboard salle: tout compte connecté (user/superadmin)."""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if not check_admin_auth():
-            return admin_auth_required()
-        return func(*args, **kwargs)
+        if not site_auth_required():
+            return func(*args, **kwargs)
+        if _is_authenticated():
+            u = _current_user()
+            if not _profile_complete(u):
+                if request.endpoint == 'complete_profile':
+                    return func(*args, **kwargs)
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        'success': False,
+                        'error': 'Profil incomplet. Complétez votre profil structure.',
+                        'profile_incomplete': True,
+                    }), 428
+                return redirect(url_for('complete_profile'))
+            return func(*args, **kwargs)
+        return redirect_to_login()
     return wrapper
+
+
+def require_operator_or_admin_session(func):
+    """Accueil et APIs métier : session requise."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not site_auth_required():
+            return func(*args, **kwargs)
+        if _is_authenticated():
+            u = _current_user()
+            if not _profile_complete(u):
+                if request.endpoint == 'complete_profile':
+                    return func(*args, **kwargs)
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        'success': False,
+                        'error': 'Profil incomplet. Complétez votre profil structure.',
+                        'profile_incomplete': True,
+                    }), 428
+                return redirect(url_for('complete_profile'))
+            return func(*args, **kwargs)
+        return redirect_to_login()
+    return wrapper
+
+
+@app.context_processor
+def inject_session():
+    sa = site_auth_required()
+    u = _current_user()
+    return {
+        'current_role': session.get('role'),
+        'current_user': session.get('username'),
+        'current_gym_name': session.get('gym_name'),
+        'current_full_name': session.get('full_name'),
+        'site_auth_required': sa,
+        'operator_login_required': sa,
+        'admin_login_required': admin_login_required(),
+        'dashboard_refresh_ms': app.config.get('DASHBOARD_REFRESH_MS', 120000),
+        'list_qr_per_page': app.config.get('LIST_QR_PER_PAGE', 15),
+        'profile_incomplete': bool(u and not _profile_complete(u)),
+    }
 
 # Initialisation de la base de données
 def init_db():
-    """Initialise la base de données SQLite"""
-    conn = sqlite3.connect(app.config['DATABASE_PATH'])
-    c = conn.cursor()
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS qr_codes (
-            id TEXT PRIMARY KEY,
-            client_name TEXT NOT NULL,
-            client_firstname TEXT,
-            client_phone TEXT,
-            client_email TEXT,
-            client_id TEXT,
-            comment TEXT,
-            service TEXT,
-            ticket_number TEXT,
-            qr_data TEXT NOT NULL,
-            qr_hash TEXT NOT NULL UNIQUE,
-            expiration_date DATETIME NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            printed_at DATETIME,
-            is_active INTEGER DEFAULT 1
-        )
-    ''')
-    
-    c.execute('''
-        CREATE INDEX IF NOT EXISTS idx_expiration ON qr_codes(expiration_date)
-    ''')
-    
-    c.execute('''
-        CREATE INDEX IF NOT EXISTS idx_active ON qr_codes(is_active)
-    ''')
-    
-    conn.commit()
-    conn.close()
+    """Initialise les collections Firestore (schema-less)."""
+    store.init_schema()
+    ensure_legacy_admin_user()
+    ensure_superadmin_user()
 
-def get_db():
-    """Obtient une connexion à la base de données"""
-    conn = sqlite3.connect(app.config['DATABASE_PATH'])
-    conn.row_factory = sqlite3.Row
-    return conn
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Évite un 400 brut: retour à login avec message clair."""
+    app.logger.warning("CSRF invalide: %s", e.description)
+    return redirect(url_for('login', error='csrf'))
 
 def generate_qr_hash(data):
     """Génère un hash unique pour le QR Code"""
@@ -185,34 +401,893 @@ def get_printer():
     
     return None
 
+
+# Cache léger pour /api/status uniquement (évite timeouts USB à chaque polling client).
+_printer_status_lock = threading.Lock()
+_printer_status_until_monotonic = 0.0
+_printer_status_cached = {'connected': False, 'info': None}
+
+# Réduction lectures Firestore : réponses GET /api/list_qr (invalidées après mutation).
+_list_qr_resp_cache_lock = threading.Lock()
+_list_qr_resp_cache = {}
+_LIST_QR_CACHE_MAX_KEYS = 64
+
+# Migration QR sans owner_id : évite de rescanner jusqu'à 10k docs à chaque login.
+_attach_unowned_lock = threading.Lock()
+_attach_unowned_last_monotonic = 0.0
+
+
+def _maybe_attach_owner_to_unowned_qr(owner_id: str) -> int:
+    """
+    Migration QR sans owner_id — scan potentiellement très coûteux en lectures Firestore.
+    Cooldown process-local : évite de répéter à chaque ouverture de /login (voir config).
+    """
+    cooldown = int(app.config.get('ATTACH_UNOWNED_QR_COOLDOWN_SECONDS') or 0)
+    if cooldown <= 0:
+        return store.attach_owner_to_unowned_qr(owner_id)
+    global _attach_unowned_last_monotonic
+    with _attach_unowned_lock:
+        now = time.monotonic()
+        if now - _attach_unowned_last_monotonic < cooldown:
+            return 0
+        count = store.attach_owner_to_unowned_qr(owner_id)
+        _attach_unowned_last_monotonic = time.monotonic()
+        return count
+
+
+def _invalidate_list_qr_cache_for_owner(owner_id):
+    """Après création / suppression / impression : évite une liste dashboard obsolète si cache activé."""
+    oid = str(owner_id or '').strip()
+    if not oid:
+        return
+    prefix = oid + '|'
+    with _list_qr_resp_cache_lock:
+        for k in list(_list_qr_resp_cache.keys()):
+            if k.startswith(prefix):
+                _list_qr_resp_cache.pop(k, None)
+
+
+def _probe_printer_status():
+    """Sonde réelle de l’imprimante (réseau/USB). Utilisé par /api/status et non mis en cache côté appelant impression."""
+    printer_connected = False
+    printer_info = None
+    try:
+        printer = get_printer()
+        if printer:
+            printer_connected = True
+            printer_info = 'Imprimante connectée'
+            printer.close()
+        else:
+            printer_info = 'Aucune imprimante détectée'
+    except Exception as e:
+        printer_info = f'Erreur: {str(e)}'
+    return printer_connected, printer_info
+
+
+PAYMENT_MODES = frozenset({'especes', 'orange_money', 'wave'})
+
+
+def payment_mode_label(code: str) -> str:
+    m = (code or '').strip().lower()
+    return {
+        'especes': 'Espèces',
+        'orange_money': 'Orange Money',
+        'wave': 'Wave',
+    }.get(m, (code or '').strip())
+
+
+def parse_amount_field(val, field_label: str):
+    """Montant >= 0 (€ ou devise locale)."""
+    if val is None:
+        raise ValueError(f'{field_label} obligatoire')
+    if isinstance(val, str) and not val.strip():
+        raise ValueError(f'{field_label} obligatoire')
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field_label} invalide')
+    if x < 0:
+        raise ValueError(f'{field_label} doit être positif ou nul')
+    return round(x, 2)
+
+
+_SN_MOBILE_PREFIXES = frozenset({'77', '75', '76', '71', '78', '33', '70'})
+_SN_PHONE_ERR_MSG = 'Veuillez saisir un bon numéro'
+
+
+def normalize_sn_mobile_phone(raw) -> str:
+    """Normalise en +221 + partie locale : 9 chiffres (221 / indicatif pays exclus du décompte)."""
+    if raw is None:
+        raise ValueError(_SN_PHONE_ERR_MSG)
+    all_digits = ''.join(c for c in str(raw) if c.isdigit())
+    if not all_digits:
+        raise ValueError(_SN_PHONE_ERR_MSG)
+    if len(all_digits) == 12 and all_digits.startswith('221'):
+        local = all_digits[3:12]
+    elif len(all_digits) == 9:
+        local = all_digits
+    else:
+        raise ValueError(_SN_PHONE_ERR_MSG)
+    if len(local) != 9 or local[:2] not in _SN_MOBILE_PREFIXES:
+        raise ValueError(_SN_PHONE_ERR_MSG)
+    return '+221' + local
+
+
+def expiration_delta_minus_one_second(delta: timedelta) -> timedelta:
+    """
+    Durée effective stockée = durée choisie moins 1 seconde
+    (ex. 2 h → affichage du temps restant ~ 1 h 59 min 59 s ; 1 j → ~ 23 h 59 min 59 s).
+    """
+    out = delta - timedelta(seconds=1)
+    if out.total_seconds() < 1:
+        return timedelta(seconds=1)
+    return out
+
+
 def format_expiration_text(expiration_date):
-    """Formate la date d'expiration pour l'affichage"""
+    """Temps restant jusqu'à l'expiration : jour(s), heure(s), minute(s) (sans secondes)."""
     now = datetime.now()
     delta = expiration_date - now
-    
-    if delta.days > 0:
-        return f"{delta.days} jour(s)"
-    elif delta.seconds > 3600:
-        hours = delta.seconds // 3600
-        return f"{hours} heure(s)"
+    total_secs = int(delta.total_seconds())
+    if total_secs <= 0:
+        return 'Expiré'
+    days, rem = divmod(total_secs, 86400)
+    hours, rem2 = divmod(rem, 3600)
+    minutes = rem2 // 60
+    parts = []
+    if days:
+        parts.append(f'{days} jour(s)')
+    if hours:
+        parts.append(f'{hours} heure(s)')
+    if minutes:
+        parts.append(f'{minutes} minute(s)')
+    if not parts:
+        parts.append("moins d'1 minute")
+    return ' '.join(parts)
+
+
+def ticket_width():
+    """Caractères par ligne pour l’imprimante thermique (80 mm)."""
+    return max(24, min(48, int(app.config.get('TICKET_WIDTH_CHARS') or 32)))
+
+
+def ticket_preview_width():
+    """Caractères par ligne pour l’aperçu web (peut être plus large que le papier)."""
+    d = int(app.config.get('TICKET_PREVIEW_WIDTH_CHARS') or 52)
+    return max(32, min(80, d))
+
+
+def format_amount_ticket(val):
+    """Montant affiché type caisse (ex. 20 000 ou 1 250,50)."""
+    if val is None or (isinstance(val, str) and not str(val).strip()):
+        return '0'
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return str(val).strip()
+    if abs(x - round(x, 2)) < 0.001:
+        n = int(round(x))
+        return '{:,}'.format(n).replace(',', ' ')
+    intpart = int(abs(x))
+    frac = int(round((abs(x) - intpart) * 100))
+    sign = '-' if x < 0 else ''
+    return sign + '{:,}'.format(intpart).replace(',', ' ') + ',{:02d}'.format(frac)
+
+
+def ticket_row_lr_lines(left, right, width=None, *, left_max=None, right_numeric=False):
+    """
+    Une ou plusieurs lignes : libellé + valeur sur la même ligne tant que possible ;
+    si la valeur dépasse la colonne droite, les suites restent alignées sous la valeur (pas de libellé seul).
+    """
+    w = width or ticket_width()
+    L = (left or '').strip()
+    R = (str(right) if right is not None else '').strip()
+    if not R:
+        return [(L or '')[:w].ljust(w)[:w]]
+    if left_max is not None:
+        mid = max(7, min(w - 8, int(left_max)))
     else:
-        minutes = delta.seconds // 60
-        return f"{minutes} minute(s)"
+        mid = w // 2
+    rc = w - mid
+    if len(R) <= rc:
+        Lfit = L[:mid].ljust(mid)
+        Rfit = R.rjust(rc) if right_numeric else R.ljust(rc)
+        return [(Lfit + Rfit)[:w]]
+    Lfit = L[:mid].ljust(mid)
+    out = []
+    pos = 0
+    first = True
+    while pos < len(R):
+        chunk = R[pos : pos + rc]
+        pos += len(chunk)
+        rfit = chunk.rjust(rc) if right_numeric else chunk.ljust(rc)
+        if first:
+            out.append((Lfit + rfit)[:w])
+            first = False
+        else:
+            out.append((' ' * mid + chunk.ljust(rc))[:w])
+    return out
+
+
+def ticket_header_salle_block(sub_label, gym_name, address, phone, width=None):
+    """
+    En-tête sous REÇU :
+    - gauche : libellé (ex. SALLE DE GYM) puis adresse sur les lignes suivantes ;
+    - droite : nom de la salle puis téléphone (alignés à droite).
+    """
+    w = width or ticket_width()
+    sub_label = (sub_label or 'SALLE DE GYM').strip().upper()
+    gn = (gym_name or '-').strip()
+    addr = (address or '').strip() or '-'
+    ph = (phone or '-').strip()
+    rc = max(len(ph), min(len(gn), w - 8), 10)
+    rc = min(rc, w - 8)
+    lc = w - rc
+    right_parts = []
+    pos = 0
+    while pos < len(gn):
+        chunk = gn[pos : pos + rc]
+        pos += len(chunk)
+        right_parts.append(chunk.rjust(rc))
+    if not right_parts:
+        right_parts = ['-'.rjust(rc)]
+    right_parts.append(ph.rjust(rc))
+    left_parts = [sub_label[:lc].ljust(lc)]
+    pos = 0
+    while pos < len(addr):
+        left_parts.append(addr[pos : pos + lc].ljust(lc))
+        pos += lc
+    n = max(len(left_parts), len(right_parts))
+    out = []
+    for i in range(n):
+        L = left_parts[i] if i < len(left_parts) else (' ' * lc)
+        Rcol = right_parts[i] if i < len(right_parts) else (' ' * rc)
+        out.append((L[:lc].ljust(lc) + Rcol[:rc].rjust(rc))[:w])
+    return out
+
+
+def ticket_client_info_lines(client_phone, who, email, client_address, width=None):
+    """
+    Bloc client : même principe que l'en-tête salle (colonnes lc / rc, valeurs alignées à droite).
+    Gauche : Nom, Numéro, Mail, Adresse (une ligne de libellé par champ, suites vides).
+    Droite : nom, n°, mail, adresse (coupures dans la colonne droite si besoin).
+    """
+    w = width or ticket_width()
+    who = ((who or '').strip() or '-')
+    num = ((str(client_phone).strip() if client_phone else '') or '-')
+    email = ((email or '').strip() or '-')
+    addr = ((client_address or '').strip() or '-')
+
+    rights_raw = [who, num, email, addr]
+    rc = max(len(s) for s in rights_raw)
+    rc = max(10, min(rc, w - 8))
+    lc = w - rc
+
+    left_parts = []
+    right_parts = []
+
+    def append_field(label, value):
+        v = (value or '').strip() or '-'
+        first = True
+        pos = 0
+        while pos < len(v):
+            chunk = v[pos : pos + rc]
+            pos += len(chunk)
+            right_parts.append(chunk.rjust(rc))
+            if first:
+                left_parts.append(label[:lc].ljust(lc))
+                first = False
+            else:
+                left_parts.append(' ' * lc)
+
+    append_field('Nom:', who)
+    append_field('Numéro:', num)
+    append_field('Mail:', email)
+    append_field('Adresse:', addr)
+
+    n = max(len(left_parts), len(right_parts))
+    out = []
+    for i in range(n):
+        L = left_parts[i] if i < len(left_parts) else (' ' * lc)
+        Rcol = right_parts[i] if i < len(right_parts) else (' ' * rc)
+        out.append((L[:lc].ljust(lc) + Rcol[:rc].rjust(rc))[:w])
+    return out
+
+
+def ticket_row_lr(left, right, width=None, *, left_max=None, right_numeric=False):
+    """Première ligne seulement (compat)."""
+    return ticket_row_lr_lines(left, right, width, left_max=left_max, right_numeric=right_numeric)[0]
+
+
+def ticket_item_lines(qty, description, amount_str, width=None):
+    """Ligne(s) article : libellé sur une ou plusieurs lignes, montant sur la dernière ligne à droite."""
+    w = width or ticket_width()
+    qty_s = str(qty).strip() or '1'
+    desc = (description or '').strip()
+    amt = (amount_str or '').strip()
+    prefix = f'{qty_s}  '
+    reserve = len(amt) + 1
+    max_desc = max(4, w - len(prefix) - reserve)
+    if not desc:
+        line = prefix.rstrip()
+        pad = w - len(line) - len(amt)
+        return [line + (' ' * max(1, pad)) + amt]
+    if len(prefix) + len(desc) + reserve <= w:
+        line = (prefix + desc).strip()
+        pad = w - len(line) - len(amt)
+        pad = max(1, pad)
+        return [line + (' ' * pad) + amt]
+    chunks = []
+    i = 0
+    while i < len(desc):
+        chunks.append(desc[i : i + max_desc])
+        i += max_desc
+    if not chunks:
+        chunks = ['']
+    out = []
+    for idx, dch in enumerate(chunks):
+        pre = prefix if idx == 0 else ' ' * len(prefix)
+        is_last = idx == len(chunks) - 1
+        if is_last:
+            line = pre + dch
+            pad = w - len(line) - len(amt)
+            if pad < 1:
+                dch = dch[: max(0, len(dch) - 1)]
+                line = pre + dch
+                pad = w - len(line) - len(amt)
+                pad = max(1, pad)
+            out.append(line + (' ' * pad) + amt)
+        else:
+            out.append((pre + dch).ljust(w)[:w])
+    return out
+
+
+def ticket_item_line(qty, description, amount_str, width=None):
+    """Une seule ligne (rétrocompat) : tronque si nécessaire."""
+    return ticket_item_lines(qty, description, amount_str, width)[0]
+
+
+def _parse_iso_datetime(val):
+    if not val:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        if s.endswith('Z'):
+            s = s[:-1] + '+00:00'
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _ticket_branding_from_owner(owner_user):
+    u = owner_user or {}
+    return {
+        'gym_name': (u.get('gym_name') or app.config.get('ADMIN_GYM_NAME') or 'Salle de sport').strip(),
+        'subtitle': (app.config.get('TICKET_SUBTITLE') or 'SALLE DE GYM').strip(),
+        'phone_line': (u.get('phone') or app.config.get('ADMIN_PHONE') or '').strip(),
+        'gym_address': (u.get('address') or app.config.get('ADMIN_ADDRESS') or '').strip(),
+    }
+
+
+def _wrap_center_lines(text, width):
+    t = (text or '').strip()
+    if not t:
+        return []
+    lines = []
+    for line in textwrap.wrap(t, width=width, break_long_words=True, break_on_hyphens=False):
+        lines.append(line.center(width))
+    return lines
+
+
+def build_ticket_preview_parts(rec, expiration_date, owner_user=None, session_dict=None, *, emis_label=True):
+    """
+    Lignes du ticket découpées : (avant le QR, après le QR), pour l'aperçu écran.
+    """
+    w = ticket_preview_width()
+    branding = _ticket_branding_from_owner(owner_user)
+
+    def g(key):
+        try:
+            v = rec[key]
+        except (KeyError, TypeError, IndexError):
+            return ''
+        if v is None:
+            return ''
+        return str(v).strip()
+
+    before = []
+
+    title = 'Reçu  de paiement'
+    if title:
+        before.append(title.center(w))
+        before.append('')
+
+    who = (g('client_name') + (' ' + g('client_firstname') if g('client_firstname') else '')).strip()
+    before.extend(
+        ticket_client_info_lines(
+            g('client_phone') or '-',
+            who,
+            g('client_email') or '-',
+            g('client_address') or '',
+            w,
+        )
+    )
+
+    before.append('')
+
+    prest = g('subscription_type') or 'Prestation'
+    amt_paid = f"{format_amount_ticket(rec.get('amount_paid'))} F CFA"
+    before.extend(ticket_row_lr_lines('Prestation:', prest, w, right_numeric=True))
+    before.extend(ticket_row_lr_lines('Somme versée:', amt_paid, w, right_numeric=True))
+    before.append('')
+
+    thanks = (app.config.get('TICKET_THANKS') or 'Merci de votre fidélité').strip()
+    if thanks and not thanks.endswith('!'):
+        thanks = f'{thanks} !'
+    after = []
+
+    def append_block_with_gap(text):
+        t = (text or '').strip()
+        if not t:
+            return
+        after.extend(textwrap.wrap(t, width=w, break_long_words=True, break_on_hyphens=False))
+        after.append('')
+
+    append_block_with_gap((branding['gym_name'] or '-').strip() or '-')
+    append_block_with_gap((branding.get('phone_line') or '').strip())
+    append_block_with_gap((branding.get('gym_address') or '').strip())
+    append_block_with_gap(thanks)
+    if after and after[-1] == '':
+        after.pop()
+    after.append('SCANNEZ À L\'ENTRÉE'.center(w))
+    exp_txt = f"Expire le {expiration_date.strftime('%d/%m/%Y %H:%M')}"
+    for ln in textwrap.wrap(exp_txt, width=w, break_long_words=True, break_on_hyphens=False):
+        after.append(ln.center(w))
+    return before, after
+
+
+def format_ticket_text_lines(rec, expiration_date, owner_user=None, session_dict=None, *, emis_label=True):
+    """Texte du ticket (aperçu), avec placeholder à la place du QR (légacy / copie)."""
+    w = ticket_preview_width()
+    before, after = build_ticket_preview_parts(
+        rec, expiration_date, owner_user, session_dict, emis_label=emis_label
+    )
+    ph = '[ QR code imprimé sous ce bloc ]'.center(w)
+    return before + [ph, ''] + after
+
+
+def print_receipt_escpos(printer, qr_record, expiration_date, owner_user=None):
+    """Impression thermique type reçu de caisse + QR en bas."""
+    w = ticket_width()
+    branding = _ticket_branding_from_owner(owner_user)
+
+    def emit(txt):
+        printer.text(txt)
+
+    def emit_lr(left, right, **kw):
+        for line in ticket_row_lr_lines(left, right, width=w, **kw):
+            emit(line + '\n')
+
+    client_name = str(qr_record.get('client_name') or '').strip()
+    firstn = str(qr_record.get('client_firstname') or '').strip()
+    who = (client_name + (' ' + firstn if firstn else '')).strip()
+    client_phone = str(qr_record.get('client_phone') or '').strip()
+    client_email = str(qr_record.get('client_email') or '').strip()
+    client_address = str(qr_record.get('client_address') or '').strip()
+    prest = str(qr_record.get('subscription_type') or 'Prestation').strip()
+    prest_line = prest
+
+    printer.set(align='center', font='a', width=1, height=1)
+    emit('\n')
+
+    title_rx = 'Reçu  de paiement'
+    if title_rx:
+        printer.set(align='center', font='b', width=1, height=1)
+        emit(title_rx[: w + 4] + '\n')
+        emit('\n')
+    printer.set(align='left', font='a', width=1, height=1)
+
+    for line in ticket_client_info_lines(
+        client_phone or '-',
+        who,
+        client_email or '-',
+        client_address or '',
+        w,
+    ):
+        emit(line + '\n')
+
+    emit('\n')
+
+    amt_paid = f"{format_amount_ticket(qr_record.get('amount_paid'))} F CFA"
+    emit_lr('Prestation:', prest_line, right_numeric=True)
+    emit_lr('Somme versée:', amt_paid, right_numeric=True)
+    emit('\n')
+
+    printer.set(align='center')
+    qr_img = generate_qr_code_image(qr_record['qr_data'], size=220)
+    try:
+        printer.image(qr_img, impl='bitImageRaster', center=True)
+    except AttributeError:
+        try:
+            printer.image(qr_img, center=True)
+        except Exception:
+            emit('\nQR\n')
+            emit(str(qr_record.get('qr_hash') or '')[:32] + '\n')
+    except Exception as e:
+        app.logger.warning('Erreur impression image QR: %s', e)
+        emit('\nQR\n')
+        emit(str(qr_record.get('qr_hash') or '')[:32] + '\n')
+
+    emit('\n')
+    printer.set(align='center', font='b', width=1, height=1)
+    emit(branding['gym_name'][: w + 8] + '\n')
+    printer.set(align='center', font='a', width=1, height=1)
+    phone_salle = (branding.get('phone_line') or '').strip()
+    gym_addr = (branding.get('gym_address') or '').strip()
+    for chunk in textwrap.wrap(phone_salle, width=w, break_long_words=True):
+        emit(chunk.center(w) + '\n')
+    for chunk in textwrap.wrap(gym_addr, width=w, break_long_words=True):
+        emit(chunk.center(w) + '\n')
+    thanks = (app.config.get('TICKET_THANKS') or 'MERCI DE VOTRE FIDÉLITÉ').strip()
+    if thanks and not thanks.endswith('!'):
+        thanks = f'{thanks} !'
+    for chunk in textwrap.wrap(thanks, width=w, break_long_words=True):
+        emit(chunk.center(w) + '\n')
+
+    printer.set(align='center', font='b', width=1, height=1)
+    emit("SCANNEZ A L'ENTREE\n")
+    printer.set(align='center', font='a', width=1, height=1)
+    exp_block = f"Expire le {expiration_date.strftime('%d/%m/%Y %H:%M')}"
+    for chunk in textwrap.wrap(exp_block, width=w, break_long_words=True, break_on_hyphens=False):
+        emit(chunk.center(w) + '\n')
+    emit('\n\n')
+
+
+def _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, limit, owner_id):
+    filters = QueryFilters(
+        filter_type=filter_type,
+        search=search,
+        ticket=ticket,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
+    return store.list_qr(filters, owner_id=owner_id)
+
+
+def _qr_list_stats_from_rows(rows, now=None):
+    """Compteurs actifs / expirés alignés sur la logique de _rows_to_qr_json_list (une passe, sans construire les dicts)."""
+    if now is None:
+        now = datetime.now()
+    active_count = 0
+    expired_count = 0
+    for row in rows:
+        is_active_flag = bool(row.get('is_active', True))
+        expiration_raw = str(row.get('expiration_date') or '')
+        try:
+            expiration_date = datetime.fromisoformat(expiration_raw)
+            is_expired = now > expiration_date
+        except ValueError:
+            is_expired = True
+        if not is_expired and is_active_flag:
+            active_count += 1
+        else:
+            expired_count += 1
+    return active_count, expired_count
+
+
+def _rows_to_qr_json_list(rows, now=None):
+    if now is None:
+        now = datetime.now()
+    qr_list = []
+    for row in rows:
+        expiration_raw = str(row.get('expiration_date') or '')
+        try:
+            expiration_date = datetime.fromisoformat(expiration_raw)
+            is_expired = now > expiration_date
+        except ValueError:
+            expiration_date = now
+            is_expired = True
+        qr_list.append({
+            'id': row.get('id'),
+            'client_name': row.get('client_name'),
+            'client_firstname': row.get('client_firstname'),
+            'client_phone': row.get('client_phone'),
+            'client_email': row.get('client_email'),
+            'client_address': row.get('client_address'),
+            'ticket_number': row.get('ticket_number'),
+            'subscription_type': row.get('subscription_type'),
+            'amount_total': row.get('amount_total'),
+            'amount_paid': row.get('amount_paid'),
+            'payment_mode': row.get('payment_mode'),
+            'service': row.get('service'),
+            'created_at': row.get('created_at'),
+            'expiration_date': row.get('expiration_date'),
+            'printed_at': row.get('printed_at'),
+            'is_active': bool(row.get('is_active', True)),
+            'is_expired': is_expired,
+            'expiration_text': format_expiration_text(expiration_date) if not is_expired else 'Expiré'
+        })
+    return qr_list
+
+
+def _login_session_from_user(user):
+    """Écrit la session Flask comme après une connexion classique."""
+    session.clear()
+    session['role'] = str(user.get('role') or 'admin')
+    session['user_id'] = str(user.get('id') or '')
+    session['username'] = str(user.get('username') or '')
+    session['full_name'] = str(user.get('full_name') or '')
+    session['gym_name'] = str(user.get('gym_name') or '')
+    session.permanent = True
+
+
+def _resolve_or_create_google_user(userinfo):
+    """
+    Retourne (user_dict, None) ou (None, code_erreur).
+    Codes : missing_claims, email_not_verified
+    """
+    sub = str(userinfo.get('sub') or '').strip()
+    email = (userinfo.get('email') or '').strip().lower()
+    name = (userinfo.get('name') or userinfo.get('given_name') or '').strip()
+    email_verified = userinfo.get('email_verified')
+
+    if not sub or not email:
+        return None, 'missing_claims'
+    if email_verified is False:
+        return None, 'email_not_verified'
+
+    user = store.get_user_by_google_sub(sub)
+    if user:
+        return user, None
+
+    user = store.get_user_by_email(email)
+    if user:
+        store.update_user(user['id'], {'google_sub': sub})
+        return store.get_user_by_id(user['id']), None
+
+    local = email.split('@')[0]
+    base_username = ''.join(c if c.isalnum() or c in '_-' else '_' for c in local)[:40]
+    base_username = base_username.strip('_') or 'user'
+    username = base_username
+    while store.get_user_by_username(username):
+        username = f'{base_username}_{secrets.token_hex(3)}'[:64]
+
+    user_id = str(uuid.uuid4())
+    store.create_user({
+        'id': user_id,
+        'username': username,
+        'password_hash': generate_password_hash(secrets.token_urlsafe(32)),
+        'role': 'user',
+        'full_name': name or base_username,
+        'gym_name': '',
+        'phone': '',
+        'address': '',
+        'email': email,
+        'google_sub': sub,
+        'is_active': True,
+        'created_at': datetime.utcnow().isoformat(),
+        'source': 'google-oauth',
+    })
+    return store.get_user_by_id(user_id), None
+
 
 # Routes principales
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Connexion / inscription des salles (multi-comptes)."""
+    try:
+        ensure_legacy_admin_user()
+        ensure_superadmin_user()
+    except Exception as e:
+        app.logger.warning("Synchronisation comptes au login ignorée: %s", e)
+
+    # Session résiduelle (ex. ancienne version sans user_id) : évite boucles et menu « connecté » fantôme.
+    if session.get('role') and not session.get('user_id'):
+        session.clear()
+
+    # Aligné avec index/API : session « role » seule peut boucler avec / si user_id absent ou utilisateur inconnu.
+    if _is_authenticated():
+        nxt = _safe_next_url(request.args.get('next')) or _safe_next_url(request.form.get('next'))
+        return redirect(nxt or url_for('index'))
+
+    error = None
+    success = None
+    active_tab = 'login'
+    err_arg = (request.args.get('error') or '').strip().lower()
+    if err_arg == 'csrf':
+        error = "Session expirée. Rechargez la page puis réessayez."
+    elif err_arg == 'google_oauth_disabled':
+        error = "La connexion Google n'est pas configurée (identifiants OAuth manquants)."
+    elif err_arg == 'google_email_not_verified':
+        error = "Votre adresse Google n'est pas vérifiée. Vérifiez votre compte Google puis réessayez."
+    elif err_arg == 'google_auth_failed':
+        error = "La connexion Google a échoué. Réessayez ou utilisez identifiant / mot de passe."
+    if (request.args.get('registered') or '').strip() == '1':
+        success = "Inscription réussie. Connectez-vous."
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'login').strip().lower()
+        if action == 'register':
+            active_tab = 'signup'
+            gym_name = (request.form.get('gym_name') or '').strip()
+            phone = (request.form.get('phone') or '').strip()
+            secondary_phone = (request.form.get('secondary_phone') or '').strip()
+            email = (request.form.get('email') or '').strip().lower()
+            address = (request.form.get('address') or '').strip()
+            username = (request.form.get('username') or '').strip().lower()
+            password = request.form.get('password') or ''
+            password_confirm = request.form.get('password_confirm') or ''
+
+            if not all([gym_name, phone, address, username, password, password_confirm]):
+                error = "Tous les champs d'inscription sont obligatoires."
+            elif len(password) < 8:
+                error = 'Le mot de passe doit contenir au moins 8 caractères.'
+            elif password != password_confirm:
+                error = 'La confirmation du mot de passe ne correspond pas.'
+            elif email and '@' not in email:
+                error = "L'email saisi est invalide."
+            elif store.get_user_by_username(username):
+                error = 'Cet identifiant existe déjà.'
+            elif store.get_user_by_phone(phone):
+                error = 'Ce numéro de téléphone existe déjà.'
+            elif secondary_phone and secondary_phone == phone:
+                error = 'Le 2e numéro doit être différent du numéro principal.'
+            else:
+                store.create_user({
+                    'id': str(uuid.uuid4()),
+                    'username': username,
+                    'password_hash': generate_password_hash(password),
+                    'role': 'user',
+                    'full_name': gym_name,
+                    'gym_name': gym_name,
+                    'phone': phone,
+                    'secondary_phone': secondary_phone,
+                    'email': email,
+                    'address': address,
+                    'is_active': True,
+                    'created_at': datetime.utcnow().isoformat(),
+                    'source': 'self-signup',
+                })
+                return redirect(url_for('login', registered='1'))
+        else:
+            username = (request.form.get('username') or '').strip()
+            password = request.form.get('password') or ''
+            user = try_login(username, password)
+            if user:
+                session.clear()
+                session['role'] = str(user.get('role') or 'admin')
+                session['user_id'] = str(user.get('id') or '')
+                session['username'] = str(user.get('username') or username)
+                session['full_name'] = str(user.get('full_name') or '')
+                session['gym_name'] = str(user.get('gym_name') or '')
+                session.permanent = True
+                nxt = _safe_next_url(request.form.get('next'))
+                return redirect(nxt or url_for('index'))
+            error = 'Identifiants invalides.'
+            active_tab = 'login'
+
+    next_arg = _safe_next_url(request.args.get('next')) or ''
+    return render_template('login.html', error=error, success=success, next_url=next_arg, active_tab=active_tab)
+
+
+@app.route('/auth/google')
+def auth_google():
+    """Démarre le flux OAuth Google (Authlib)."""
+    if not _google_oauth_configured():
+        return redirect(url_for('login', error='google_oauth_disabled'))
+    nxt = _safe_next_url(request.args.get('next'))
+    if nxt:
+        session['oauth_next'] = nxt
+    else:
+        session.pop('oauth_next', None)
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    """Callback OAuth Google — doit correspondre à l'URI enregistrée dans Google Cloud Console."""
+    if not _google_oauth_configured():
+        return redirect(url_for('login', error='google_oauth_disabled'))
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception as exc:
+        app.logger.warning('OAuth Google (authorize_access_token): %s', exc)
+        return redirect(url_for('login', error='google_auth_failed'))
+
+    userinfo = token.get('userinfo')
+    if not userinfo:
+        try:
+            resp = oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo', token=token)
+            userinfo = resp.json()
+        except Exception as exc:
+            app.logger.warning('OAuth Google (userinfo): %s', exc)
+            return redirect(url_for('login', error='google_auth_failed'))
+
+    user, err = _resolve_or_create_google_user(userinfo)
+    if err == 'email_not_verified':
+        return redirect(url_for('login', error='google_email_not_verified'))
+    if err == 'missing_claims' or not user:
+        return redirect(url_for('login', error='google_auth_failed'))
+
+    if not bool(user.get('is_active', True)):
+        return redirect(url_for('login', error='google_auth_failed'))
+
+    _login_session_from_user(user)
+
+    nxt = _safe_next_url(session.pop('oauth_next', None))
+    if not _profile_complete(user):
+        return redirect(url_for('complete_profile'))
+    return redirect(nxt or url_for('index'))
+
+
+csrf.exempt(auth_google_callback)
+
+
+@app.route('/complete-profile', methods=['GET', 'POST'])
+@require_operator_or_admin_session
+def complete_profile():
+    """Compléter les infos structure après connexion (ex: OAuth)."""
+    user = _current_user()
+    if not user:
+        return redirect_to_login()
+    if _profile_complete(user):
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        gym_name = (request.form.get('gym_name') or '').strip()
+        phone = (request.form.get('phone') or '').strip()
+        secondary_phone = (request.form.get('secondary_phone') or '').strip()
+        address = (request.form.get('address') or '').strip()
+        if not all([gym_name, phone, address]):
+            error = 'Nom de la structure, téléphone et adresse sont obligatoires.'
+        elif secondary_phone and secondary_phone == phone:
+            error = 'Le 2e numéro doit être différent du numéro principal.'
+        else:
+            store.update_user(user['id'], {
+                'gym_name': gym_name,
+                'full_name': gym_name,
+                'phone': phone,
+                'secondary_phone': secondary_phone,
+                'address': address,
+            })
+            session['gym_name'] = gym_name
+            session['full_name'] = gym_name
+            return redirect(url_for('index'))
+
+    return render_template(
+        'complete_profile.html',
+        error=error,
+        user=user,
+    )
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@require_operator_or_admin_session
 def index():
-    """Page d'accueil avec formulaire de génération"""
+    """Page d'accueil (création QR) après connexion."""
     return render_template('index.html')
 
+
 @app.route('/dashboard')
-@require_admin
+@require_admin_session
 def dashboard():
     """Dashboard administrateur"""
     return render_template('dashboard.html')
 
+
 # APIs REST
 @app.route('/api/create_qr', methods=['POST'])
+@require_operator_or_admin_session
 def create_qr():
     """API pour créer un nouveau QR Code"""
     try:
@@ -224,30 +1299,73 @@ def create_qr():
             return jsonify({'success': False, 'error': 'Le nom est obligatoire'}), 400
         
         client_firstname = data.get('client_firstname', '').strip()
-        client_phone = data.get('client_phone', '').strip()
+        try:
+            client_phone = normalize_sn_mobile_phone(data.get('client_phone', ''))
+        except ValueError:
+            return jsonify({'success': False, 'error': _SN_PHONE_ERR_MSG}), 400
         client_email = data.get('client_email', '').strip()
-        client_id = data.get('client_id', '').strip()
-        comment = data.get('comment', '').strip()
+        client_address = data.get('client_address', '').strip()
         service = data.get('service', '').strip()
-        ticket_number = data.get('ticket_number', '').strip()
+        subscription_type = data.get('subscription_type', '').strip()
+        payment_mode = (data.get('payment_mode') or '').strip().lower()
+
+        if not subscription_type:
+            return jsonify({'success': False, 'error': 'La prestation est obligatoire'}), 400
+        if payment_mode not in PAYMENT_MODES:
+            return jsonify({'success': False, 'error': 'Le mode de paiement est obligatoire (Espèces, Orange Money ou Wave)'}), 400
+        try:
+            amount_total = parse_amount_field(data.get('amount_total'), 'Le montant dû')
+            amount_paid = parse_amount_field(data.get('amount_paid'), 'Le montant payé')
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        if round(amount_paid, 2) > round(amount_total, 2):
+            return jsonify({
+                'success': False,
+                'error': 'Le montant payé ne peut pas dépasser le montant dû.',
+            }), 400
         
         # Gestion de l'expiration
         expiration_option = data.get('expiration', '24h')
         custom_hours = data.get('custom_hours')
         
-        if expiration_option == 'custom' and custom_hours:
-            custom_hours_int = int(custom_hours)
+        if expiration_option == 'custom':
+            if custom_hours is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Indiquez le nombre d\'heures pour une expiration personnalisée.',
+                }), 400
+            ch_str = str(custom_hours).strip()
+            if not ch_str:
+                return jsonify({
+                    'success': False,
+                    'error': 'Indiquez le nombre d\'heures pour une expiration personnalisée.',
+                }), 400
+            try:
+                custom_hours_int = int(ch_str)
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'error': "Nombre d'heures invalide."}), 400
             if custom_hours_int < 1 or custom_hours_int > 8760:
                 return jsonify({'success': False, 'error': "L'expiration personnalisée doit être entre 1h et 8760h"}), 400
             expiration_delta = timedelta(hours=custom_hours_int)
         else:
             expiration_delta = app.config['EXPIRATION_OPTIONS'].get(
                 expiration_option, 
-                app.config['EXPIRATION_OPTIONS']['24h']
+                app.config['EXPIRATION_OPTIONS']['24h'],
             )
         
+        expiration_delta = expiration_delta_minus_one_second(expiration_delta)
         expiration_date = datetime.now() + expiration_delta
         
+        owner_id = _current_owner_id()
+        if not owner_id:
+            return jsonify({'success': False, 'error': 'Session invalide, reconnectez-vous.'}), 401
+
+        try:
+            ticket_number = store.allocate_ticket_number(owner_id)
+        except Exception as e:
+            app.logger.exception("allocate_ticket_number: %s", e)
+            return jsonify({'success': False, 'error': 'Impossible d\'attribuer un numéro de ticket. Réessayez.'}), 503
+
         # Génération du QR Code unique
         qr_uuid = str(uuid.uuid4())
         timestamp = int(expiration_date.timestamp())
@@ -258,67 +1376,115 @@ def create_qr():
             'firstname': client_firstname,
             'phone': client_phone,
             'email': client_email,
-            'client_id': client_id,
+            'address': client_address,
             'ticket': ticket_number,
-            'expires': timestamp
+            'expires': timestamp,
+            'subscription_type': subscription_type,
+            'service': service,
+            'amount_total': amount_total,
+            'amount_paid': amount_paid,
+            'payment_mode': payment_mode,
         }
         
         qr_data_json = json.dumps(qr_data_dict, sort_keys=True)
         signed_qr_data = sign_qr_data(qr_data_json)
         qr_hash = generate_qr_hash(signed_qr_data)
         
-        # Vérifier l'unicité du hash
-        conn = get_db()
-        existing = conn.execute(
-            'SELECT id FROM qr_codes WHERE qr_hash = ?', (qr_hash,)
-        ).fetchone()
-        
-        if existing:
-            conn.close()
-            return jsonify({'success': False, 'error': 'Erreur: hash duplicata'}), 500
+        if store.qr_hash_exists(qr_hash, owner_id=owner_id):
+            return jsonify({
+                'success': False,
+                'error': 'Un QR identique existe déjà. Modifiez les données ou réessayez.',
+            }), 409
         
         # Génération de l'image QR Code
         qr_image = generate_qr_code_image(signed_qr_data)
         qr_base64 = qr_to_base64(qr_image)
         
-        # Sauvegarde en base de données
-        conn.execute('''
-            INSERT INTO qr_codes 
-            (id, client_name, client_firstname, client_phone, client_email, 
-             client_id, comment, service, ticket_number, qr_data, qr_hash, expiration_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (qr_uuid, client_name, client_firstname, client_phone, client_email,
-              client_id, comment, service, ticket_number, signed_qr_data, 
-              qr_hash, expiration_date))
-        
-        conn.commit()
-        qr_id = qr_uuid
-        conn.close()
-        
+        created_iso = datetime.utcnow().isoformat()
+
+        # Sauvegarde Firestore
+        qr_id = store.create_qr({
+            'id': qr_uuid,
+            'owner_id': owner_id,
+            'client_name': client_name,
+            'client_firstname': client_firstname,
+            'client_phone': client_phone,
+            'client_email': client_email,
+            'client_address': client_address,
+            'service': service,
+            'subscription_type': subscription_type,
+            'amount_total': amount_total,
+            'amount_paid': amount_paid,
+            'payment_mode': payment_mode,
+            'ticket_number': ticket_number,
+            'qr_data': signed_qr_data,
+            'qr_hash': qr_hash,
+            'expiration_date': expiration_date.isoformat(),
+            'created_at': created_iso,
+            'printed_at': None,
+            'is_active': True,
+        })
+
+        preview_row = {
+            'client_name': client_name,
+            'client_firstname': client_firstname,
+            'client_phone': client_phone,
+            'client_email': client_email,
+            'client_address': client_address,
+            'ticket_number': ticket_number,
+            'service': service,
+            'subscription_type': subscription_type,
+            'amount_total': amount_total,
+            'amount_paid': amount_paid,
+            'payment_mode': payment_mode,
+            'created_at': created_iso,
+        }
+        _owner = _current_user()
+        _sess = dict(session)
+        before_qr, after_qr = build_ticket_preview_parts(
+            preview_row,
+            expiration_date,
+            owner_user=_owner,
+            session_dict=_sess,
+        )
+        ticket_preview_lines = format_ticket_text_lines(
+            preview_row,
+            expiration_date,
+            owner_user=_owner,
+            session_dict=_sess,
+        )
+
+        _invalidate_list_qr_cache_for_owner(owner_id)
+
         return jsonify({
             'success': True,
             'qr_id': qr_id,
             'qr_image': qr_base64,
             'qr_data': signed_qr_data,
             'expiration_date': expiration_date.isoformat(),
-            'expiration_text': format_expiration_text(expiration_date)
+            'expiration_text': format_expiration_text(expiration_date),
+            'ticket_preview_lines': ticket_preview_lines,
+            'ticket_preview_before_qr': before_qr,
+            'ticket_preview_after_qr': after_qr,
+            'ticket_number': ticket_number,
         })
         
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': "Format de données invalide"}), 400
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error("create_qr", e)
     except Exception as e:
-        app.logger.error(f"Erreur lors de la création du QR Code: {e}")
-        return jsonify({'success': False, 'error': "Erreur interne"}), 500
+        app.logger.exception("Erreur lors de la création du QR Code: %s", e)
+        if app.config.get('DEBUG'):
+            return jsonify({'success': False, 'error': f"Erreur interne: {e}"}), 500
+        return jsonify({'success': False, 'error': "Erreur interne (voir logs serveur)"}), 500
 
 @app.route('/api/print_qr/<qr_id>', methods=['POST'])
+@require_operator_or_admin_session
 def print_qr(qr_id):
     """API pour imprimer un QR Code"""
     try:
-        conn = get_db()
-        qr_record = conn.execute(
-            'SELECT * FROM qr_codes WHERE id = ?', (qr_id,)
-        ).fetchone()
-        conn.close()
+        qr_record = store.get_qr(qr_id, owner_id=_current_owner_id())
         
         if not qr_record:
             return jsonify({'success': False, 'error': 'QR Code non trouvé'}), 404
@@ -339,88 +1505,18 @@ def print_qr(qr_id):
             }), 503
         
         try:
-            # Configuration de l'imprimante
-            printer.set(align='center', font='a', width=1, height=1)
-            
-            # En-tête (optionnel: logo si disponible)
-            printer.text("\n")
-            printer.text("=" * 32 + "\n")
-            printer.set(align='center', font='b', width=2, height=2)
-            printer.text("TICKET QR CODE\n")
-            printer.set(align='center', font='a', width=1, height=1)
-            printer.text("=" * 32 + "\n\n")
-            
-            # Informations client
-            printer.set(align='left')
-            printer.text(f"Nom: {qr_record['client_name']}\n")
-            if qr_record['client_firstname']:
-                printer.text(f"Prenom: {qr_record['client_firstname']}\n")
-            if qr_record['client_phone']:
-                printer.text(f"Tel: {qr_record['client_phone']}\n")
-            if qr_record['client_email']:
-                printer.text(f"Email: {qr_record['client_email']}\n")
-            if qr_record['client_id']:
-                printer.text(f"ID: {qr_record['client_id']}\n")
-            if qr_record['ticket_number']:
-                printer.set(align='center', font='b')
-                printer.text(f"\nTicket #{qr_record['ticket_number']}\n")
-                printer.set(align='left', font='a')
-            if qr_record['service']:
-                printer.text(f"Service: {qr_record['service']}\n")
-            if qr_record['comment']:
-                printer.text(f"Note: {qr_record['comment']}\n")
-            
-            printer.text("\n" + "-" * 32 + "\n\n")
-            
-            # QR Code (impression de l'image)
-            printer.set(align='center')
-            qr_image = generate_qr_code_image(qr_record['qr_data'], size=256)
-            
-            # Imprimer l'image QR Code
-            try:
-                # La méthode image() accepte directement une PIL Image
-                # Elle convertit automatiquement pour l'imprimante thermique
-                printer.image(qr_image, impl='bitImageRaster', center=True)
-            except AttributeError:
-                # Fallback pour les anciennes versions d'escpos
-                try:
-                    printer.image(qr_image, center=True)
-                except:
-                    # Dernier recours: imprimer le texte du hash
-                    printer.text(f"\nQR CODE\n")
-                    printer.text(f"{qr_record['qr_hash'][:32]}\n")
-            except Exception as e:
-                app.logger.warning(f"Erreur impression image QR: {e}")
-                # Fallback: imprimer le texte du hash
-                printer.text(f"\nQR CODE\n")
-                printer.text(f"{qr_record['qr_hash'][:32]}\n")
-            
-            printer.text("\n")
-            printer.set(align='center', font='b')
-            printer.text("SCANNEZ LE QR CODE\n")
-            printer.set(align='center', font='a')
-            
-            # Date d'expiration
-            exp_text = expiration_date.strftime("%d/%m/%Y %H:%M")
-            printer.text(f"\nExpire le: {exp_text}\n")
-            
-            # Pied de page
-            printer.text("\n" + "=" * 32 + "\n")
-            printer.text(f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}\n")
-            printer.text("=" * 32 + "\n\n\n")
-            
-            # Couper le papier
+            print_receipt_escpos(
+                printer,
+                qr_record,
+                expiration_date,
+                owner_user=_current_user(),
+            )
             printer.cut()
             
             # Mettre à jour la date d'impression
-            conn = get_db()
-            conn.execute(
-                'UPDATE qr_codes SET printed_at = ? WHERE id = ?',
-                (datetime.now().isoformat(), qr_id)
-            )
-            conn.commit()
-            conn.close()
-            
+            store.update_qr_printed_at(qr_id, datetime.now().isoformat(), owner_id=_current_owner_id())
+            _invalidate_list_qr_cache_for_owner(_current_owner_id())
+
             return jsonify({'success': True, 'message': 'Impression réussie'})
             
         except Exception as e:
@@ -432,99 +1528,249 @@ def print_qr(qr_id):
             except:
                 pass
                 
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error("print_qr", e)
     except Exception as e:
         app.logger.error(f"Erreur lors de l'impression du QR Code: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/list_qr', methods=['GET'])
-@require_admin
+@require_admin_session
 def list_qr():
-    """API pour lister tous les QR Codes"""
+    """API pour lister les QR Codes (filtres + recherche + pagination)."""
     try:
-        filter_type = request.args.get('filter', 'all')  # all, active, expired
-        
-        conn = get_db()
-        query = 'SELECT * FROM qr_codes'
-        
-        if filter_type == 'active':
-            query += ' WHERE is_active = 1 AND expiration_date > datetime("now")'
-        elif filter_type == 'expired':
-            query += ' WHERE expiration_date <= datetime("now") OR is_active = 0'
-        
-        query += ' ORDER BY created_at DESC LIMIT 100'
-        
-        rows = conn.execute(query).fetchall()
-        conn.close()
-        
-        qr_list = []
-        for row in rows:
-            expiration_date = datetime.fromisoformat(row['expiration_date'])
-            is_expired = datetime.now() > expiration_date
-            
-            qr_list.append({
-                'id': row['id'],
-                'client_name': row['client_name'],
-                'client_firstname': row['client_firstname'],
-                'client_phone': row['client_phone'],
-                'client_email': row['client_email'],
-                'ticket_number': row['ticket_number'],
-                'service': row['service'],
-                'created_at': row['created_at'],
-                'expiration_date': row['expiration_date'],
-                'printed_at': row['printed_at'],
-                'is_active': bool(row['is_active']),
-                'is_expired': is_expired,
-                'expiration_text': format_expiration_text(expiration_date) if not is_expired else 'Expiré'
-            })
-        
-        return jsonify({'success': True, 'qr_codes': qr_list})
-        
+        ttl_cache = float(app.config.get('LIST_QR_RESPONSE_CACHE_SECONDS') or 0)
+        owner_for_cache = _current_owner_id()
+        qs_key = request.query_string.decode('utf-8')
+        cache_key = f'{owner_for_cache}|{qs_key}'
+        if ttl_cache > 0:
+            with _list_qr_resp_cache_lock:
+                hit = _list_qr_resp_cache.get(cache_key)
+                if hit and time.monotonic() < hit[0]:
+                    return jsonify(hit[1])
+
+        filter_type = request.args.get('filter', 'all')
+        search = (request.args.get('search') or '').strip()
+        ticket = (request.args.get('ticket') or '').strip()
+        date_from = (request.args.get('date_from') or '').strip()
+        date_to = (request.args.get('date_to') or '').strip()
+        fetch_max = app.config.get('LIST_QR_FETCH_MAX', 3000)
+        default_per_page = app.config.get('LIST_QR_PER_PAGE', 15)
+
+        try:
+            per_page = int(request.args.get('per_page', default_per_page))
+        except (TypeError, ValueError):
+            per_page = default_per_page
+        per_page = min(100, max(5, per_page))
+
+        try:
+            page = int(request.args.get('page', 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, page)
+
+        rows = _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, fetch_max, _current_owner_id())
+        total = len(rows)
+        list_now = datetime.now()
+        active_count, expired_count = _qr_list_stats_from_rows(rows, list_now)
+
+        total_pages = (total + per_page - 1) // per_page if total else 0
+        if total_pages and page > total_pages:
+            page = total_pages
+        offset = (page - 1) * per_page
+        qr_page = _rows_to_qr_json_list(rows[offset : offset + per_page], list_now)
+
+        payload = {
+            'success': True,
+            'qr_codes': qr_page,
+            'stats': {
+                'total': total,
+                'active': active_count,
+                'expired': expired_count,
+            },
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'total_pages': total_pages,
+            },
+        }
+        if ttl_cache > 0:
+            with _list_qr_resp_cache_lock:
+                _list_qr_resp_cache[cache_key] = (time.monotonic() + ttl_cache, payload)
+                while len(_list_qr_resp_cache) > _LIST_QR_CACHE_MAX_KEYS:
+                    _list_qr_resp_cache.pop(next(iter(_list_qr_resp_cache)), None)
+        return jsonify(payload)
+
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error("list_qr", e)
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des QR Codes: {e}")
         return jsonify({'success': False, 'error': "Erreur interne"}), 500
 
+
+@app.route('/api/export_qr', methods=['GET'])
+@require_admin_session
+def export_qr():
+    """Export CSV ou Excel des QR codes (mêmes filtres que la liste)."""
+    fmt = (request.args.get('format') or 'csv').lower().strip()
+    filter_type = request.args.get('filter', 'all')
+    search = (request.args.get('search') or '').strip()
+    ticket = (request.args.get('ticket') or '').strip()
+    date_from = (request.args.get('date_from') or '').strip()
+    date_to = (request.args.get('date_to') or '').strip()
+    max_rows = app.config.get('EXPORT_MAX_ROWS', 5000)
+
+    try:
+        rows = _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, max_rows, _current_owner_id())
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error("export_qr", e)
+    headers = [
+        'id', 'client_name', 'client_firstname', 'client_phone', 'client_email', 'client_address',
+        'ticket_number', 'subscription_type', 'amount_total', 'amount_paid', 'payment_mode',
+        'service', 'created_at', 'expiration_date', 'printed_at', 'is_active', 'qr_hash',
+    ]
+
+    if fmt == 'csv':
+        si = StringIO()
+        writer = csv.writer(si, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(headers)
+        for row in rows:
+            writer.writerow([row.get(h) for h in headers])
+        data = si.getvalue().encode('utf-8-sig')
+        bio = BytesIO(data)
+        bio.seek(0)
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name='qr_codes_export.csv',
+            mimetype='text/csv; charset=utf-8',
+        )
+
+    if fmt == 'xlsx':
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'QR codes'
+        ws.append(headers)
+        for row in rows:
+            ws.append([row.get(h) for h in headers])
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name='qr_codes_export.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    abort(400)
+
+
 @app.route('/api/delete_qr/<qr_id>', methods=['DELETE', 'POST'])
-@require_admin
+@require_admin_session
 def delete_qr(qr_id):
     """API pour supprimer un QR Code"""
     try:
         if not qr_id:
             return jsonify({'success': False, 'error': 'ID manquant'}), 400
             
-        conn = get_db()
-        result = conn.execute('DELETE FROM qr_codes WHERE id = ?', (qr_id,))
-        conn.commit()
-        deleted = result.rowcount > 0
-        conn.close()
-        
+        oid = _current_owner_id()
+        deleted = store.delete_qr(qr_id, owner_id=oid)
+
         if deleted:
+            _invalidate_list_qr_cache_for_owner(oid)
             return jsonify({'success': True, 'message': 'QR Code supprimé'})
         else:
             return jsonify({'success': False, 'error': 'QR Code non trouvé'}), 404
             
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error("delete_qr", e)
     except Exception as e:
         app.logger.error(f"Erreur lors de la suppression: {e}")
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': 'Erreur serveur'}), 500
 
+
+@app.route('/api/qr_ticket_preview/<qr_id>', methods=['GET'])
+@require_admin_session
+def qr_ticket_preview(qr_id):
+    """Données JSON pour afficher le ticket complet dans l’application (sans nouvel onglet)."""
+    try:
+        qr_record = store.get_qr(qr_id, owner_id=_current_owner_id())
+        if not qr_record:
+            return jsonify({'success': False, 'error': 'QR Code non trouvé'}), 404
+        if not verify_qr_signature(qr_record['qr_data']):
+            return jsonify({'success': False, 'error': 'Signature QR invalide'}), 400
+
+        expiration_raw = str(qr_record.get('expiration_date') or '')
+        try:
+            expiration_date = datetime.fromisoformat(expiration_raw)
+        except ValueError:
+            return jsonify({'success': False, 'error': "Date d'expiration invalide"}), 400
+
+        preview_row = {
+            'client_name': qr_record.get('client_name'),
+            'client_firstname': qr_record.get('client_firstname'),
+            'client_phone': qr_record.get('client_phone'),
+            'client_email': qr_record.get('client_email'),
+            'client_address': qr_record.get('client_address'),
+            'ticket_number': qr_record.get('ticket_number'),
+            'service': qr_record.get('service'),
+            'subscription_type': qr_record.get('subscription_type'),
+            'amount_total': qr_record.get('amount_total'),
+            'amount_paid': qr_record.get('amount_paid'),
+            'payment_mode': qr_record.get('payment_mode'),
+        }
+        _owner = _current_user()
+        _sess = dict(session)
+        before_qr, after_qr = build_ticket_preview_parts(
+            preview_row,
+            expiration_date,
+            owner_user=_owner,
+            session_dict=_sess,
+        )
+        qr_image = generate_qr_code_image(qr_record['qr_data'])
+        qr_base64 = qr_to_base64(qr_image)
+
+        now = datetime.now()
+        is_expired = now > expiration_date
+        is_active = bool(qr_record.get('is_active', True))
+
+        return jsonify({
+            'success': True,
+            'qr_id': qr_id,
+            'qr_image': qr_base64,
+            'ticket_preview_before_qr': before_qr,
+            'ticket_preview_after_qr': after_qr,
+            'expiration_text': format_expiration_text(expiration_date),
+            'ticket_number': qr_record.get('ticket_number'),
+            'is_expired': is_expired,
+            'is_active': is_active,
+        })
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error('qr_ticket_preview', e)
+    except Exception as e:
+        app.logger.error('qr_ticket_preview: %s', e)
+        return jsonify({'success': False, 'error': 'Erreur serveur'}), 500
+
+
 @app.route('/api/qr_image/<qr_id>')
-@require_admin
+@require_admin_session
 def qr_image(qr_id):
     """API pour obtenir l'image du QR Code"""
     try:
-        conn = get_db()
-        qr_record = conn.execute(
-            'SELECT qr_data FROM qr_codes WHERE id = ?', (qr_id,)
-        ).fetchone()
-        conn.close()
+        qr_record = store.get_qr(qr_id, owner_id=_current_owner_id())
         
         if not qr_record:
             abort(404)
         
         if not verify_qr_signature(qr_record['qr_data']):
             abort(400)
-
+        
         qr_image = generate_qr_code_image(qr_record['qr_data'])
         img_io = BytesIO()
         qr_image.save(img_io, format='PNG')
@@ -532,27 +1778,37 @@ def qr_image(qr_id):
         
         return send_file(img_io, mimetype='image/png')
         
+    except GoogleAPICallError as e:
+        app.logger.warning("qr_image Firestore: %s", e)
+        abort(503)
     except Exception as e:
         app.logger.error(f"Erreur lors de la génération de l'image: {e}")
         abort(500)
 
 @app.route('/api/status')
+@require_operator_or_admin_session
 def status():
     """API pour vérifier le statut de l'application et de l'imprimante"""
-    printer_connected = False
-    printer_info = None
-    
-    try:
-        printer = get_printer()
-        if printer:
-            printer_connected = True
-            printer_info = "Imprimante connectée"
-            printer.close()
-        else:
-            printer_info = "Aucune imprimante détectée"
-    except Exception as e:
-        printer_info = f"Erreur: {str(e)}"
-    
+    global _printer_status_until_monotonic, _printer_status_cached
+    ttl = float(app.config.get('PRINTER_STATUS_CACHE_SECONDS') or 0)
+    now_m = time.monotonic()
+    if ttl > 0:
+        with _printer_status_lock:
+            if now_m < _printer_status_until_monotonic:
+                c = _printer_status_cached
+                return jsonify({
+                    'success': True,
+                    'printer_connected': c['connected'],
+                    'printer_info': c['info'],
+                })
+
+    printer_connected, printer_info = _probe_printer_status()
+
+    if ttl > 0:
+        with _printer_status_lock:
+            _printer_status_cached = {'connected': printer_connected, 'info': printer_info}
+            _printer_status_until_monotonic = time.monotonic() + ttl
+
     return jsonify({
         'success': True,
         'printer_connected': printer_connected,
@@ -563,15 +1819,12 @@ def status():
 def cleanup_expired_qr():
     """Marque comme inactifs les QR Codes expirés"""
     try:
-        conn = get_db()
-        conn.execute(
-            'UPDATE qr_codes SET is_active = 0 WHERE expiration_date <= datetime("now") AND is_active = 1'
-        )
-        conn.commit()
-        conn.close()
-        app.logger.info("Nettoyage des QR Codes expirés effectué")
+        count = store.cleanup_expired_qr()
+        app.logger.info(f"Nettoyage des QR Codes expirés effectué ({count} mis à jour)")
+    except GoogleAPICallError as e:
+        app.logger.warning("Nettoyage Firestore ignoré: %s", e)
     except Exception as e:
-        app.logger.error(f"Erreur lors du nettoyage: {e}")
+        app.logger.warning(f"Nettoyage Firestore non exécuté: {e}")
 
 if __name__ == '__main__':
     # Initialisation de la base de données
@@ -581,5 +1834,5 @@ if __name__ == '__main__':
     cleanup_expired_qr()
     
     # Lancer l'application
-    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=5000)
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=app.config.get('APP_PORT', 5055))
 

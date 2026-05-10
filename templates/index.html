@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>QR Code Print - Impression Thermique</title>
+    <title>Accueil — QR Code Print</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -16,7 +16,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-white custom-navbar">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
                 <i class="bi bi-qr-code-scan"></i> QR Code Print
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -25,13 +25,21 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item">
-                        <a class="nav-link" href="/">Accueil</a>
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                     </li>
+                    {% if not current_role and site_auth_required %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/dashboard">
-                            Dashboard
-                        </a>
+                        <a class="nav-link" href="{{ url_for('login', next=request.path) }}">Connexion</a>
                     </li>
+                    {% endif %}
+                    {% if current_role %}
+                    <li class="nav-item">
+                        <form method="post" action="{{ url_for('logout') }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link nav-link py-0">Déconnexion ({{ current_gym_name or current_full_name or current_user or current_role }})</button>
+                        </form>
+                    </li>
+                    {% endif %}
                     <li class="nav-item ms-3">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-printer me-2 disconnected" id="printerIcon"></i>
@@ -47,10 +55,10 @@
     </nav>
 
     <div class="container my-5">
-        <div class="row g-4">
+        <div class="row g-4 index-qr-main-row">
             <!-- Colonne gauche : Formulaire -->
-            <div class="col-lg-6">
-                <div class="card shadow-lg h-100">
+            <div class="col-lg-6 d-flex align-items-stretch">
+                <div class="card shadow-lg index-qr-card flex-fill w-100">
                     <div class="card-header bg-primary text-white">
                         <h3 class="card-title mb-0">
                             <i class="bi bi-pencil-square"></i> Créer un QR Code
@@ -60,68 +68,99 @@
                         <form id="qrForm">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="client_name" class="form-label">
-                                        Nom <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="text" class="form-control" id="client_name" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="client_firstname" class="form-label">Prénom</label>
-                                    <input type="text" class="form-control" id="client_firstname">
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="client_phone" class="form-label">Téléphone</label>
-                                    <input type="tel" class="form-control" id="client_phone">
+                                    <label for="client_name" class="form-label">Prénom et nom <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="client_name" required placeholder="Ex: Modou Fall" autocomplete="name">
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="client_email" class="form-label">Email</label>
-                                    <input type="email" class="form-control" id="client_email">
+                                    <input type="email" class="form-control" id="client_email" placeholder="Ex: modoufall@gmail.com" autocomplete="email">
                                 </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="client_id" class="form-label">Identifiant interne</label>
-                                    <input type="text" class="form-control" id="client_id">
+                                    <label for="client_phone_local" class="form-label">Téléphone</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" id="phonePrefixSn" aria-hidden="true">+221</span>
+                                        <input type="tel" class="form-control" id="client_phone_local"
+                                               maxlength="9" minlength="9" inputmode="numeric" pattern="[0-9]{9}"
+                                               placeholder="" required autocomplete="tel-national"
+                                               aria-describedby="phonePrefixSn">
+                                    </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="ticket_number" class="form-label">Numéro de ticket</label>
-                                    <input type="text" class="form-control" id="ticket_number">
+                                    <label for="client_address" class="form-label">Adresse <span class="text-muted">(optionnel)</span></label>
+                                    <input type="text" class="form-control" id="client_address" placeholder="Rue, quartier, ville…" autocomplete="street-address">
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="service" class="form-label">Service</label>
-                                <input type="text" class="form-control" id="service" placeholder="Ex: Réparation, Maintenance...">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="subscription_type" class="form-label">Prestation <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="subscription_type" required placeholder="Ex: Entrée, forfait, consultation, adhésion…">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="service" class="form-label">Détail <span class="text-muted">(optionnel)</span></label>
+                                    <input type="text" class="form-control" id="service" placeholder="Précisions, formule, horaire…" autocomplete="off">
+                                </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="comment" class="form-label">Commentaire</label>
-                                <textarea class="form-control" id="comment" rows="2"></textarea>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="amount_total" class="form-label">Montant dû <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="amount_total" required min="0" step="0.01" placeholder="0">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="amount_paid" class="form-label">Montant payé <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="amount_paid" required min="0" step="0.01" placeholder="0">
+                                </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="form-label">Durée d'expiration</label>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <select class="form-select" id="expiration" name="expiration">
-                                            <option value="24h" selected>24 heures</option>
-                                            <option value="7j">7 jours</option>
-                                            <option value="30j">30 jours</option>
-                                            <option value="custom">Personnalisé</option>
-                                        </select>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="payment_mode_toggle" class="form-label">Mode de paiement <span class="text-danger">*</span></label>
+                                    <input type="hidden" id="payment_mode" name="payment_mode" value="">
+                                    <div class="dropdown qrp-dropdown w-100">
+                                        <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                                type="button" id="payment_mode_toggle" data-bs-toggle="dropdown"
+                                                data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                                aria-expanded="false">
+                                            <span id="payment_mode_label">Choisir…</span>
+                                        </button>
+                                        <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="payment_mode_toggle">
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="payment_mode" data-value="" data-label="Choisir…">Choisir…</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="payment_mode" data-value="especes" data-label="Espèces">Espèces</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="payment_mode" data-value="orange_money" data-label="Orange Money">Orange Money</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="payment_mode" data-value="wave" data-label="Wave">Wave</button></li>
+                                        </ul>
                                     </div>
-                                    <div class="col-md-6" id="custom_hours_container" style="display: none;">
-                                        <input type="number" class="form-control" id="custom_hours" 
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label" for="expiration_toggle">Durée d'expiration</label>
+                                    <input type="hidden" id="expiration" name="expiration" value="24h">
+                                    <div class="dropdown qrp-dropdown w-100">
+                                        <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                                type="button" id="expiration_toggle" data-bs-toggle="dropdown"
+                                                data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                                aria-expanded="false">
+                                            <span id="expiration_label">24 heures</span>
+                                        </button>
+                                        <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="expiration_toggle">
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="expiration" data-value="24h" data-label="24 heures">24 heures</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="expiration" data-value="7j" data-label="7 jours">7 jours</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="expiration" data-value="30j" data-label="30 jours">30 jours</button></li>
+                                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="expiration" data-value="custom" data-label="Personnalisé">Personnalisé</button></li>
+                                        </ul>
+                                    </div>
+                                    <div id="custom_hours_container" class="mt-2" style="display: none;">
+                                        <label class="form-label small text-muted mb-1" for="custom_hours">Heures</label>
+                                        <input type="number" class="form-control" id="custom_hours"
                                                placeholder="Nombre d'heures" min="1" max="8760">
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="d-grid gap-2">
+                            <div class="d-grid gap-2 mt-4">
                                 <button type="submit" class="btn btn-primary btn-lg" id="generateBtn">
                                     <i class="bi bi-magic"></i> Générer le QR Code
                                 </button>
@@ -132,47 +171,73 @@
             </div>
 
             <!-- Colonne droite : QR Code -->
-            <div class="col-lg-6">
-                <div class="card shadow-lg qr-display-card h-100">
-                    <div class="card-header bg-primary text-white">
+            <div class="col-lg-6 d-flex align-items-stretch">
+                <div class="card shadow-lg index-qr-card qr-display-card flex-fill w-100 d-flex flex-column">
+                    <div class="card-header bg-primary text-white flex-shrink-0">
                         <h3 class="card-title mb-0">
-                            <i class="bi bi-qr-code-scan"></i> QR Code
+                            <i class="bi bi-receipt"></i> Ticket &amp; QR
                         </h3>
                     </div>
-                    <div class="card-body d-flex flex-column align-items-center justify-content-center" id="qrDisplayCard">
+                    <div class="card-body d-flex flex-column flex-grow-1 py-3 px-3" id="qrDisplayCard">
                         <!-- État initial : Message d'attente -->
-                        <div id="qrEmptyState" class="text-center">
-                            <i class="bi bi-qr-code-scan" style="font-size: 5rem; color: #e9ecef; margin-bottom: 1.5rem;"></i>
-                            <h5 class="text-muted mb-2">Aucun QR Code généré</h5>
-                            <p class="text-muted small">Remplissez le formulaire à gauche<br>et cliquez sur "Générer le QR Code"</p>
+                        <div id="qrEmptyState" class="text-center flex-grow-1 d-flex flex-column justify-content-center align-items-center w-100 px-2 py-4">
+                            <i class="bi bi-qr-code-scan qr-empty-icon"></i>
+                            <h5 class="text-muted mb-2">Aucun ticket</h5>
+                            <p class="text-muted small mb-0">Remplissez le formulaire à gauche<br>et cliquez sur « Générer le QR Code »</p>
                         </div>
                         
-                        <!-- État avec QR Code -->
-                        <div id="qrResult" style="display: none; width: 100%;">
-                            <div class="text-center mb-3">
-                                <h5 class="mb-2">QR Code généré</h5>
-                                <p class="text-muted small mb-0" id="expirationText"></p>
-                            </div>
-                            
-                            <div class="text-center mb-4">
-                                <div id="qrImageContainer" class="qr-display">
-                                    <!-- L'image QR sera injectée ici -->
-                                </div>
-                            </div>
+                        <!-- État avec ticket complet (texte + QR + pied) dans la carte -->
+                        <div id="qrResult" class="w-100 flex-grow-1 flex-column d-none qr-result-with-ticket">
+                            <p class="text-center text-muted small mb-2" id="expirationText"></p>
+                            <div id="inlineTicketSheet" class="ticket-receipt-sheet ticket-on-qr-box w-100 mb-3" role="region" aria-label="Aperçu du ticket sur le reçu"></div>
 
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-success btn-lg" id="printBtn">
-                                    <i class="bi bi-printer"></i> Imprimer maintenant
-                                </button>
-                                <button type="button" class="btn btn-outline-primary" id="downloadBtn">
-                                    <i class="bi bi-download"></i> Télécharger
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="resetBtn">
-                                    <i class="bi bi-arrow-repeat"></i> Générer un nouveau
-                                </button>
+                            <div class="w-100 px-0">
+                                <div class="row g-2 justify-content-center qr-result-btn-row">
+                                    <div class="col-12 col-sm-4">
+                                        <button type="button" class="btn btn-success w-100 py-2" id="printBtn" disabled title="Aperçu puis imprimer">
+                                            <i class="bi bi-printer"></i> Imprimer
+                                        </button>
+                                    </div>
+                                    <div class="col-12 col-sm-4">
+                                        <button type="button" class="btn btn-outline-primary w-100 py-2" id="downloadBtn" title="Télécharger">
+                                            <i class="bi bi-download"></i> Télécharger
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-center">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="resetBtn">
+                                        <i class="bi bi-arrow-repeat"></i> Générer un nouveau
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal aperçu ticket avant impression -->
+    <div class="modal fade" id="ticketPreviewModal" tabindex="-1" aria-labelledby="ticketPreviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ticketPreviewModalLabel"><i class="bi bi-receipt"></i> Aperçu du ticket complet</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted text-center mb-3 mb-md-2">
+                        Aperçu du ticket complet (80&nbsp;mm) — même ordre qu’à l’impression : texte, QR, puis pied de page.
+                    </p>
+                    <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto" role="region" aria-label="Aperçu du ticket thermique">
+                        <!-- Rempli par main.js : texte + QR + texte -->
+                    </div>
+                </div>
+                <div class="modal-footer flex-wrap gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    <button type="button" class="btn btn-success" id="confirmPrintBtn">
+                        <i class="bi bi-printer"></i> Confirmer l'impression
+                    </button>
                 </div>
             </div>
         </div>
@@ -191,8 +256,10 @@
 
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
+
 

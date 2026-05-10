@@ -1,0 +1,14 @@
+# Blueprint Render : https://render.com/docs/blueprint-spec
+# Après le premier push, complétez les secrets dans le dashboard (SECRET_KEY, Firestore, OAuth, etc.).
+
+services:
+  - type: web
+    name: qr-code-print
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python scripts/render_init.py
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 app:app
+    healthCheckPath: /login
+    autoDeployTrigger: commit

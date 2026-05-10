@@ -41,6 +41,10 @@ Thumbs.db
 .env
 .env.local
 
+# Clés GCP / fichiers sensibles hors dépôt
+secrets/
+*.pem
+
 # Tests
 .pytest_cache/
 .coverage
