@@ -260,6 +260,17 @@ document.addEventListener('DOMContentLoaded', function() {
     syncQrFormDropdownLabelsFromHidden();
     syncCustomExpirationUi();
 
+    const viewTicketBtn = document.getElementById('viewTicketBtn');
+    if (viewTicketBtn) {
+        viewTicketBtn.addEventListener('click', function () {
+            if (!currentQRId) {
+                showToast('Erreur', 'Générez d\'abord un QR code', 'warning');
+                return;
+            }
+            openTicketPreviewModal();
+        });
+    }
+
     document.getElementById('printBtn').addEventListener('click', function() {
         if (!currentQRId) {
             showToast('Erreur', 'Générez d\'abord un QR code', 'warning');
@@ -314,6 +325,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const inlineScaleOuter = document.querySelector('.ticket-inline-scale-outer');
     if (inlineScaleOuter && typeof ResizeObserver !== 'undefined') {
         new ResizeObserver(() => scheduleTicketScale()).observe(inlineScaleOuter);
+    }
+    const ticketIndexScrollBand = document.querySelector('.ticket-index-scroll-band');
+    if (ticketIndexScrollBand && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => scheduleTicketScale()).observe(ticketIndexScrollBand);
     }
     const qrDisplayCard = document.getElementById('qrDisplayCard');
     if (qrDisplayCard && typeof ResizeObserver !== 'undefined') {
@@ -489,8 +504,10 @@ function displayQRCode(data) {
 
     const previewBtn = document.getElementById('previewBtn');
     const printBtn = document.getElementById('printBtn');
+    const viewTicketBtnEl = document.getElementById('viewTicketBtn');
     if (previewBtn) previewBtn.disabled = false;
     if (printBtn) printBtn.disabled = false;
+    if (viewTicketBtnEl) viewTicketBtnEl.disabled = false;
 }
 
 function handleDownload() {
@@ -609,8 +626,10 @@ function handleReset() {
 
     const previewBtn = document.getElementById('previewBtn');
     const printBtn = document.getElementById('printBtn');
+    const viewTicketBtnEl = document.getElementById('viewTicketBtn');
     if (previewBtn) previewBtn.disabled = true;
     if (printBtn) printBtn.disabled = true;
+    if (viewTicketBtnEl) viewTicketBtnEl.disabled = true;
 }
 
 function showToast(title, message, type = 'info') {

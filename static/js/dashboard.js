@@ -740,7 +740,7 @@ async function viewQRCode(qrId) {
         '<span class="visually-hidden">Chargement...</span></div></div>';
 
     if (titleEl) {
-        titleEl.innerHTML = '<i class="bi bi-receipt"></i> Ticket complet';
+        titleEl.textContent = 'Aperçu du ticket';
     }
 
     if (!dashboardTicketModalInstance) {
@@ -768,9 +768,9 @@ async function viewQRCode(qrId) {
 
         if (titleEl) {
             const tn = data.ticket_number;
-            titleEl.innerHTML = tn
-                ? '<i class="bi bi-receipt"></i> Ticket n° ' + escapeHtml(String(tn))
-                : '<i class="bi bi-receipt"></i> Ticket complet';
+            titleEl.textContent = tn
+                ? 'Ticket n° ' + String(tn)
+                : 'Aperçu du ticket';
         }
 
         scheduleDashboardTicketModalScale();

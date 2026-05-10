@@ -97,7 +97,7 @@
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="subscription_type" class="form-label">Prestation <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="subscription_type" required placeholder="Ex: Entrée, forfait, consultation, adhésion…">
+                                    <input type="text" class="form-control" id="subscription_type" required placeholder="Séance, abonnement mensuel…">
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="service" class="form-label">Détail <span class="text-muted">(optionnel)</span></label>
@@ -189,24 +189,31 @@
                         <!-- État avec ticket complet (texte + QR + pied) dans la carte -->
                         <div id="qrResult" class="w-100 flex-grow-1 flex-column d-none qr-result-with-ticket qr-result-ticket-column">
                             <p class="text-center text-muted small mb-2 flex-shrink-0" id="expirationText"></p>
-                            <div class="ticket-inline-scale-outer mb-2 flex-grow-1 min-h-0" aria-hidden="false">
-                                <div class="ticket-scale-clip">
-                                    <div class="ticket-scale-stage">
-                                        <div id="inlineTicketSheet" class="ticket-receipt-sheet ticket-on-qr-box" role="region" aria-label="Aperçu du ticket sur le reçu"></div>
+                            <div class="ticket-index-scroll-band mb-2">
+                                <div class="ticket-inline-scale-outer mb-0 flex-grow-1 min-h-0" aria-hidden="false">
+                                    <div class="ticket-scale-clip">
+                                        <div class="ticket-scale-stage">
+                                            <div id="inlineTicketSheet" class="ticket-receipt-sheet ticket-on-qr-box" role="region" aria-label="Aperçu du ticket sur le reçu"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             <div id="qrResultActions" class="w-100 px-0 flex-shrink-0 mt-auto">
-                                <div class="row g-2 justify-content-center qr-result-btn-row">
-                                    <div class="col-12 col-sm-4">
-                                        <button type="button" class="btn btn-success w-100 py-2" id="printBtn" disabled title="Aperçu puis imprimer">
-                                            <i class="bi bi-printer"></i> Imprimer
+                                <div class="row g-1 g-sm-2 justify-content-center align-items-stretch qr-result-btn-row flex-nowrap">
+                                    <div class="col-4 ps-0">
+                                        <button type="button" class="btn btn-outline-secondary w-100 qr-result-action-btn" id="viewTicketBtn" disabled title="Voir le ticket en grand" aria-label="Voir le ticket en grand">
+                                            <i class="bi bi-eye fs-5" aria-hidden="true"></i>
                                         </button>
                                     </div>
-                                    <div class="col-12 col-sm-4">
-                                        <button type="button" class="btn btn-outline-primary w-100 py-2" id="downloadBtn" title="Télécharger">
-                                            <i class="bi bi-download"></i> Télécharger
+                                    <div class="col-4 px-1 px-sm-2">
+                                        <button type="button" class="btn btn-success w-100 qr-result-action-btn" id="printBtn" disabled title="Imprimer" aria-label="Imprimer">
+                                            <i class="bi bi-printer fs-5" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4 pe-0">
+                                        <button type="button" class="btn btn-outline-primary w-100 qr-result-action-btn" id="downloadBtn" title="Télécharger" aria-label="Télécharger">
+                                            <i class="bi bi-download fs-5" aria-hidden="true"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -223,36 +230,43 @@
         </div>
     </div>
 
-    <!-- Modal aperçu ticket avant impression -->
-    <div class="modal fade" id="ticketPreviewModal" tabindex="-1" aria-labelledby="ticketPreviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ticketPreviewModalLabel"><i class="bi bi-receipt"></i> Aperçu du ticket complet</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+    <!-- Modal aperçu ticket (Voir / avant impression) -->
+    <div class="modal fade ticket-preview-modal" id="ticketPreviewModal" tabindex="-1" aria-labelledby="ticketPreviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+            <div class="modal-content ticket-preview-modal-shell">
+                <div class="modal-header ticket-preview-modal-header border-0">
+                    <div class="ticket-preview-modal-heading">
+                        <span class="ticket-preview-modal-badge" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                        <div>
+                            <h5 class="modal-title text-white" id="ticketPreviewModalLabel">Aperçu du ticket</h5>
+                            <p class="ticket-preview-modal-subtitle mb-0">80&nbsp;mm · Texte, QR code et pied de page comme à l’impression</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
                 </div>
-                <div class="modal-body">
-                    <p class="small text-muted text-center mb-3 mb-md-2">
-                        Aperçu du ticket complet (80&nbsp;mm) — même ordre qu’à l’impression : texte, QR, puis pied de page.
-                    </p>
-                    <div class="ticket-modal-scroll-band">
-                        <div class="ticket-modal-scale-outer">
-                            <div class="ticket-scale-clip">
-                                <div class="ticket-scale-stage">
-                                    <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique">
-                                        <!-- Rempli par main.js : texte + QR + texte -->
+                <div class="modal-body ticket-preview-modal-body border-0">
+                    <div class="ticket-preview-modal-viewport">
+                        <div class="ticket-modal-scroll-band">
+                            <div class="ticket-modal-scale-outer">
+                                <div class="ticket-scale-clip">
+                                    <div class="ticket-scale-stage">
+                                        <div id="ticketFullPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique">
+                                            <!-- Rempli par main.js : texte + QR + texte -->
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer flex-wrap gap-2 justify-content-center ticket-modal-footer-icons ticket-modal-footer-two">
-                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="ticketPreviewDownloadBtn" title="Télécharger le ticket (PNG)" aria-label="Télécharger le ticket">
+                <div class="modal-footer ticket-preview-modal-footer border-0 flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center justify-content-center">
+                    <button type="button" class="btn btn-light border ticket-preview-action ticket-preview-action-secondary" id="ticketPreviewDownloadBtn" title="Enregistrer en PNG" aria-label="Télécharger le ticket en PNG">
                         <i class="bi bi-download" aria-hidden="true"></i>
+                        <span>Télécharger PNG</span>
                     </button>
-                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="confirmPrintBtn" title="Imprimer" aria-label="Confirmer l'impression">
+                    <button type="button" class="btn btn-success ticket-preview-action ticket-preview-action-primary" id="confirmPrintBtn" title="Lancer l’impression" aria-label="Confirmer l'impression">
                         <i class="bi bi-printer" aria-hidden="true"></i>
+                        <span>Imprimer</span>
                     </button>
                 </div>
             </div>

@@ -477,11 +477,70 @@ select.form-select:-webkit-autofill:focus {
     overflow: visible !important;
 }
 
-/* Dashboard liste QR : hauteur limitée + défilement ; en-têtes collants */
+/* Carte Ticket & QR (accueil) : même idée — pas de clip sur les ombres du ticket */
+.card.qr-display-card,
+.card.qr-display-card > .card-body {
+    overflow: visible !important;
+}
+
+/* Dashboard liste QR : hauteur max + défilement */
 .table-responsive-qr-dashboard {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: min(60vh, 520px);
+    max-height: min(68vh, 600px);
+}
+
+/* Boutons Voir / Imprimer / Télécharger : une seule ligne sur tout écran */
+.qr-result-btn-row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.qr-result-btn-row .qr-result-action-btn {
+    min-height: 2.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+/* Page accueil — zone ticket : hauteur = colonne flex (entre expiration et boutons), pas de plafond qui coupe le scroll */
+.ticket-index-scroll-band {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+    scrollbar-gutter: stable;
+}
+
+/* Largeur / alignement : tout le ticket entre dans la zone de scroll */
+.ticket-index-scroll-band > .ticket-inline-scale-outer {
+    flex-shrink: 0;
+    align-self: flex-start;
+    align-items: flex-start;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+}
+
+@media (max-width: 991.98px) {
+    .table-responsive-qr-dashboard {
+        max-height: min(66vh, 580px);
+    }
+}
+
+@media (max-width: 576px) {
+    .table-responsive-qr-dashboard {
+        max-height: min(64vh, 560px);
+    }
 }
 
 .table-qr-dashboard {
@@ -1088,7 +1147,6 @@ html {
     max-width: 100%;
     margin-left: auto;
     margin-right: auto;
-    max-height: min(58vh, 560px);
     flex: 1 1 auto;
 }
 
@@ -1206,6 +1264,120 @@ html {
     border-radius: 0;
 }
 
+/* ========== Modales aperçu ticket (accueil + dashboard) ========== */
+.ticket-preview-modal .ticket-preview-modal-shell {
+    border: none;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow:
+        0 28px 56px rgba(26, 39, 69, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+.ticket-preview-modal .ticket-preview-modal-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    padding: 1.15rem 1.25rem 1.05rem;
+}
+
+.ticket-preview-modal .ticket-preview-modal-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.ticket-preview-modal .ticket-preview-modal-badge {
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.14);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.ticket-preview-modal .ticket-preview-modal-heading .modal-title {
+    font-weight: 700;
+    font-size: 1.18rem;
+    letter-spacing: 0.02em;
+}
+
+.ticket-preview-modal .ticket-preview-modal-subtitle {
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    margin-top: 0.2rem;
+}
+
+.ticket-preview-modal .ticket-preview-modal-body {
+    background: linear-gradient(180deg, #eef2fa 0%, #e8edf6 55%, #e4eaf4 100%);
+    padding: 1rem 1rem 1.35rem;
+}
+
+.ticket-preview-modal .ticket-preview-modal-viewport {
+    background: rgba(255, 255, 255, 0.65);
+    border-radius: 18px;
+    padding: 0.85rem 0.65rem 1rem;
+    box-shadow:
+        inset 0 2px 12px rgba(26, 39, 69, 0.07),
+        0 1px 0 rgba(255, 255, 255, 0.85);
+    min-height: 0;
+}
+
+.ticket-preview-modal .ticket-preview-modal-footer {
+    background: #fafbfd;
+    padding: 1rem 1.15rem max(1rem, env(safe-area-inset-bottom));
+    gap: 0.65rem !important;
+    box-shadow: 0 -8px 28px rgba(26, 39, 69, 0.06);
+}
+
+.ticket-preview-modal .ticket-preview-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 2.85rem;
+    padding: 0.55rem 1.2rem;
+    border-radius: 14px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.ticket-preview-modal .ticket-preview-action i {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.ticket-preview-modal .ticket-preview-action-primary {
+    box-shadow: 0 4px 14px rgba(25, 135, 84, 0.35);
+}
+
+.ticket-preview-modal .ticket-preview-action-secondary:hover {
+    background: #fff;
+}
+
+@media (max-width: 575.98px) {
+    .ticket-preview-modal .modal-fullscreen-sm-down .ticket-preview-modal-shell {
+        border-radius: 0;
+        min-height: 100%;
+        box-shadow: none;
+    }
+
+    .ticket-preview-modal .modal-fullscreen-sm-down .ticket-preview-modal-header {
+        padding-top: max(1rem, env(safe-area-inset-top));
+    }
+
+    .ticket-preview-modal .ticket-preview-action {
+        width: 100%;
+        max-width: none;
+    }
+}
+
 /* --- Aperçu ticket : clip à la taille affichée (scale ne réduit pas le flux — évite le scroll fantôme) --- */
 .ticket-inline-scale-outer,
 .ticket-modal-scale-outer {
@@ -1248,6 +1420,18 @@ html {
         max-height: min(64dvh, 560px);
         margin-left: auto;
         margin-right: auto;
+    }
+
+    /* Accueil + dashboard — modale plein écran : plus de hauteur utile sur téléphone */
+    #ticketPreviewModal .modal-fullscreen-sm-down .modal-body,
+    #dashboardTicketModal .modal-fullscreen-sm-down .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #ticketPreviewModal .modal-fullscreen-sm-down .ticket-modal-scroll-band .ticket-modal-scale-outer,
+    #dashboardTicketModal .modal-fullscreen-sm-down .ticket-modal-scroll-band .ticket-modal-scale-outer {
+        max-height: min(78dvh, 720px);
     }
 }
 

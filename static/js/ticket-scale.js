@@ -20,6 +20,14 @@ function ticketViewportMetrics() {
 
 function measureTicketAvailHeightInline(outerEl) {
     const { vw, vh, handheld, narrow, tiny, mini, micro } = ticketViewportMetrics();
+    const band = outerEl && outerEl.closest ? outerEl.closest('.ticket-index-scroll-band') : null;
+    /** Hauteur réelle de la bande scroll (flex) — alignée sur ce que l’utilisateur peut voire faire défiler */
+    if (band) {
+        const bh = band.clientHeight;
+        if (bh > 72) {
+            return Math.max(96, bh - 10);
+        }
+    }
     const exp = document.getElementById('expirationText');
     const actions = document.getElementById('qrResultActions');
     const gap = micro ? 2 : mini ? 4 : tiny ? 5 : narrow ? 7 : 10;
@@ -162,17 +170,23 @@ function applyProportionalTicketScale(outerEl) {
     const pad = micro ? 22 : mini ? 20 : tiny ? 18 : narrow ? 17 : handheld ? 16 : 10;
 
     const isModal = outerEl.classList.contains('ticket-modal-scale-outer');
-    /** Petite largeur : échelle pilotée par la hauteur seule → ticket plus lisible ; débordement horizontal dans .ticket-modal-scroll-band */
+    const outerRect = outerEl.getBoundingClientRect();
+
+    /** Uniquement modale sur mobile : échelle sur la hauteur + scroll horizontal dans la bande modale. Page accueil : mise à l’échelle uniforme pour tout voir dans le clip. */
     const modalScrollMobile = isModal && handheld;
+    const scrollBandHeightOnly = modalScrollMobile;
 
     let availW;
     if (isModal) {
         availW = measureModalTicketAvailWidth(outerEl, pad);
     } else {
-        const outerRect = outerEl.getBoundingClientRect();
-        availW = Math.max(0, Math.min(outerRect.width, vw) - pad * 2);
-        if (vw <= 560) availW *= 0.86;
-        else if (vw <= 640) availW *= 0.91;
+        const bandEl = outerEl.closest('.ticket-index-scroll-band');
+        const wrapW = bandEl ? bandEl.clientWidth : outerRect.width;
+        /* Marge latérale un peu plus serrée dans la carte → ticket un peu plus grand */
+        const padBox = Math.max(8, pad - 4);
+        availW = Math.max(0, Math.min(wrapW, vw) - padBox * 2);
+        if (vw <= 560) availW *= 0.9;
+        else if (vw <= 640) availW *= 0.94;
         availW = Math.max(0, availW);
     }
 
@@ -181,7 +195,7 @@ function applyProportionalTicketScale(outerEl) {
         : measureTicketAvailHeightInline(outerEl);
 
     let s = 1;
-    if (modalScrollMobile) {
+    if (scrollBandHeightOnly) {
         if (w > 0 && h > 0 && availH > 0) {
             s = Math.min(1, availH / h);
         }
@@ -190,18 +204,24 @@ function applyProportionalTicketScale(outerEl) {
     } else if (w > 0 && availW > 0) {
         s = Math.min(1, availW / w);
     }
-    /* Modale : pas de réduction « sécurité » supplémentaire. Carte QR : inchangé. */
+    /* Réduction « sécurité » sur mobile (carte accueil uniquement ; pas la modale). */
     if (handheld && s > 0 && !isModal) {
-        if (micro) s *= 0.8;
-        else if (mini) s *= 0.84;
-        else if (tiny) s *= 0.87;
-        else if (narrow) s *= 0.9;
-        else if (vw <= 600) s *= 0.93;
-        else s *= 0.96;
+        if (micro) s *= 0.84;
+        else if (mini) s *= 0.88;
+        else if (tiny) s *= 0.9;
+        else if (narrow) s *= 0.92;
+        else if (vw <= 600) s *= 0.95;
+        else s *= 0.98;
     }
 
-    const scaledW = Math.ceil(w * s);
-    const scaledH = Math.ceil(h * s);
+    /* Carte accueil : léger zoom supplémentaire dans la boîte (scroll si besoin). */
+    if (!isModal && outerEl.closest('.ticket-index-scroll-band') && s > 0) {
+        s = Math.min(1, s * 1.06);
+    }
+
+    /* Marge anti-coupe : derniers pixels du ticket parfois masqués par transform / sous-pixels */
+    const scaledW = Math.max(1, Math.ceil(w * s) + 1);
+    const scaledH = Math.max(1, Math.ceil(h * s) + 2);
 
     stage.style.width = `${w}px`;
     stage.style.height = `${h}px`;
@@ -212,7 +232,7 @@ function applyProportionalTicketScale(outerEl) {
         clip.style.width = `${scaledW}px`;
         clip.style.height = `${scaledH}px`;
         clip.style.overflow = 'hidden';
-        if (modalScrollMobile) {
+        if (scrollBandHeightOnly) {
             clip.style.maxWidth = 'none';
             clip.style.marginLeft = '0';
             clip.style.marginRight = '0';
@@ -225,7 +245,7 @@ function applyProportionalTicketScale(outerEl) {
         outerEl.style.height = `${scaledH}px`;
         outerEl.style.minHeight = `${scaledH}px`;
     }
-    if (modalScrollMobile) {
+    if (scrollBandHeightOnly) {
         outerEl.style.maxWidth = 'none';
     } else {
         outerEl.style.maxWidth = '100%';

@@ -227,34 +227,41 @@
         </div>
     </div>
 
-    <!-- Modal : ticket complet (même mise en page que l’accueil) -->
-    <div class="modal fade" id="dashboardTicketModal" tabindex="-1" aria-labelledby="dashboardTicketModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="dashboardTicketModalLabel"><i class="bi bi-receipt"></i> Ticket complet</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+    <!-- Modal : ticket complet (même design que l’accueil) -->
+    <div class="modal fade ticket-preview-modal" id="dashboardTicketModal" tabindex="-1" aria-labelledby="dashboardTicketModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+            <div class="modal-content ticket-preview-modal-shell">
+                <div class="modal-header ticket-preview-modal-header border-0">
+                    <div class="ticket-preview-modal-heading">
+                        <span class="ticket-preview-modal-badge" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                        <div>
+                            <h5 class="modal-title text-white" id="dashboardTicketModalLabel">Aperçu du ticket</h5>
+                            <p class="ticket-preview-modal-subtitle mb-0">80&nbsp;mm · Texte, QR code et pied de page comme à l’impression</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
                 </div>
-                <div class="modal-body">
-                    <p class="small text-muted text-center mb-3 mb-md-2">
-                        Même ordre qu’à l’impression : texte, QR, puis pied de page (aperçu 80&nbsp;mm).
-                    </p>
-                    <div class="ticket-modal-scroll-band">
-                        <div class="ticket-modal-scale-outer">
-                            <div class="ticket-scale-clip">
-                                <div class="ticket-scale-stage">
-                                    <div id="dashboardTicketPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique"></div>
+                <div class="modal-body ticket-preview-modal-body border-0">
+                    <div class="ticket-preview-modal-viewport">
+                        <div class="ticket-modal-scroll-band">
+                            <div class="ticket-modal-scale-outer">
+                                <div class="ticket-scale-clip">
+                                    <div class="ticket-scale-stage">
+                                        <div id="dashboardTicketPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer flex-wrap gap-2 justify-content-center ticket-modal-footer-icons ticket-modal-footer-two">
-                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="dashboardTicketDownloadBtn" title="Télécharger le ticket (PNG)" aria-label="Télécharger le ticket">
+                <div class="modal-footer ticket-preview-modal-footer border-0 flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center justify-content-center">
+                    <button type="button" class="btn btn-light border ticket-preview-action ticket-preview-action-secondary" id="dashboardTicketDownloadBtn" title="Enregistrer en PNG" aria-label="Télécharger le ticket en PNG">
                         <i class="bi bi-download" aria-hidden="true"></i>
+                        <span>Télécharger PNG</span>
                     </button>
-                    <button type="button" class="btn btn-outline-primary btn-icon-foot" id="dashboardTicketPrintBtn" title="Imprimer" aria-label="Imprimer">
+                    <button type="button" class="btn btn-success ticket-preview-action ticket-preview-action-primary" id="dashboardTicketPrintBtn" title="Lancer l’impression" aria-label="Imprimer">
                         <i class="bi bi-printer" aria-hidden="true"></i>
+                        <span>Imprimer</span>
                     </button>
                 </div>
             </div>
