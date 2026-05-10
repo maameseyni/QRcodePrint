@@ -35,8 +35,6 @@ from authlib.integrations.flask_client import OAuth
 from flask_wtf.csrf import CSRFError, CSRFProtect
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
-from escpos.printer import Usb, Network, Serial
-from escpos.exceptions import USBNotFoundError
 from google.api_core.exceptions import GoogleAPICallError, PermissionDenied
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -375,8 +373,21 @@ def qr_to_base64(img):
     img_str = base64.b64encode(buffered.getvalue()).decode()
     return img_str
 
+
+def _import_escpos_printer_classes():
+    """
+    Import différé de python-escpos (charge pkg_resources via setuptools).
+    Évite d’importer au chargement du module : démarrage Gunicorn / Render plus fiable.
+    """
+    from escpos.exceptions import USBNotFoundError
+    from escpos.printer import Network, Usb
+
+    return Usb, Network, USBNotFoundError
+
+
 def get_printer():
     """Obtient une instance de l'imprimante thermique"""
+    Usb, Network, USBNotFoundError = _import_escpos_printer_classes()
     printer = None
     
     # Tentative de connexion USB

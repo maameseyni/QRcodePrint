@@ -1,6 +1,6 @@
-# Runtime Python natif (pas Docker). Render lit PYTHON_VERSION et/ou .python-version à la racine.
-# Doc : https://render.com/docs/python-version
-# Secrets : dashboard Render uniquement (pas sur GitHub).
+# Start Command dans le dashboard doit être identique à startCommand ci‑dessous (bind + $PORT).
+# Runtime Python natif : PYTHON_VERSION, runtime.txt, .python-version (doc Render).
+# Secrets : dashboard uniquement (pas sur GitHub).
 
 services:
   - type: web

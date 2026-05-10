@@ -1,5 +1,5 @@
-# python-escpos importe pkg_resources (module setuptools) au chargement.
-setuptools>=69.0.0
+# python-escpos importe pkg_resources — supprimé dans setuptools>=82 ; garder <82.
+setuptools>=69.0.0,<82
 
 Flask==3.0.0
 Flask-WTF==1.2.1
