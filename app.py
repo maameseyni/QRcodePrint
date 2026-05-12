@@ -58,6 +58,19 @@ if (
 csrf = CSRFProtect(app)
 store = FirestoreDataStore(app.config)
 
+
+@app.before_request
+def _assign_request_id():
+    g.request_id = secrets.token_hex(8)
+
+
+@app.after_request
+def _echo_request_id(resp):
+    rid = getattr(g, 'request_id', None)
+    if rid:
+        resp.headers['X-Request-ID'] = rid
+    return resp
+
 oauth = OAuth(app)
 if app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'):
     oauth.register(
@@ -145,7 +158,9 @@ def ensure_legacy_admin_user():
             'created_at': datetime.utcnow().isoformat(),
             'source': 'legacy-env',
         })
-        store.attach_owner_to_unowned_qr(user_id)
+        n_attach = store.attach_owner_to_unowned_qr(user_id)
+        if n_attach:
+            _invalidate_list_qr_cache_for_owner(user_id)
         return
     updates = {}
     if str(existing.get('role') or '').strip().lower() in ('admin', 'operator', ''):
@@ -155,7 +170,9 @@ def ensure_legacy_admin_user():
             updates[key] = profile[key]
     if updates:
         store.update_user(existing['id'], updates)
-    _maybe_attach_owner_to_unowned_qr(existing['id'])
+    n_attach = _maybe_attach_owner_to_unowned_qr(existing['id'])
+    if n_attach:
+        _invalidate_list_qr_cache_for_owner(existing['id'])
 
 
 def ensure_superadmin_user():
@@ -182,6 +199,44 @@ def ensure_superadmin_user():
         return
     if str(existing.get('role') or '').strip().lower() != 'superadmin':
         store.update_user(existing['id'], {'role': 'superadmin'})
+
+
+def ensure_operator_user():
+    """Compte caisse (Firestore) : création QR / impression, sans dashboard liste/export."""
+    username = (app.config.get('OPERATOR_USERNAME') or 'operator').strip().lower()
+    password = app.config.get('OPERATOR_PASSWORD')
+    if not username or not password:
+        return
+    gym = str(app.config.get('OPERATOR_GYM_NAME') or 'Caisse').strip()
+    phone = str(app.config.get('OPERATOR_PHONE') or '+221770000000').strip()
+    addr = str(app.config.get('OPERATOR_ADDRESS') or '-').strip()
+    existing = store.get_user_by_username(username)
+    if not existing:
+        uid = str(uuid.uuid4())
+        store.create_user({
+            'id': uid,
+            'username': username,
+            'password_hash': generate_password_hash(password),
+            'role': 'operator',
+            'full_name': gym,
+            'gym_name': gym,
+            'phone': phone,
+            'address': addr,
+            'is_active': True,
+            'created_at': datetime.utcnow().isoformat(),
+            'source': 'legacy-operator-env',
+        })
+        return
+    updates = {'role': 'operator'}
+    if not str(existing.get('gym_name') or '').strip():
+        updates['gym_name'] = gym
+    if not str(existing.get('phone') or '').strip():
+        updates['phone'] = phone
+    if not str(existing.get('address') or '').strip():
+        updates['address'] = addr
+    if not str(existing.get('full_name') or '').strip():
+        updates['full_name'] = gym
+    store.update_user(existing['id'], updates)
 
 
 def try_login(username, password):
@@ -220,6 +275,8 @@ def _user_dict_from_session(uid: str):
         'full_name': str(session.get('full_name') or ''),
         'gym_name': str(session.get('gym_name') or ''),
         'phone': str(session.get('phone') or ''),
+        'secondary_phone': str(session.get('secondary_phone') or ''),
+        'email': str(session.get('email') or ''),
         'address': str(session.get('address') or ''),
         'is_active': True,
     }
@@ -267,6 +324,10 @@ def _current_user():
     if 'phone' not in session or 'address' not in session:
         session['phone'] = str(user.get('phone') or '')
         session['address'] = str(user.get('address') or '')
+    if 'secondary_phone' not in session:
+        session['secondary_phone'] = str(user.get('secondary_phone') or '')
+    if 'email' not in session:
+        session['email'] = str(user.get('email') or '')
     g._qrprint_user = user
     return user
 
@@ -281,6 +342,8 @@ def _profile_complete(user: dict) -> bool:
     # Pour les comptes salle (user), ces champs sont obligatoires.
     role = str(user.get('role') or '').strip().lower()
     if role == 'superadmin':
+        return True
+    if role == 'operator':
         return True
     required = [
         str(user.get('gym_name') or '').strip(),
@@ -299,14 +362,21 @@ def redirect_to_login():
     return redirect(url_for('login', next=nxt or ''))
 
 
-def require_admin_session(func):
-    """Dashboard salle: tout compte connecté (user/superadmin)."""
+def require_dashboard_session(func):
+    """Liste / export dashboard : compte gestion (user, superadmin), pas le compte caisse « operator »."""
     @wraps(func)
     def wrapper(*args, **kwargs):
         if not site_auth_required():
             return func(*args, **kwargs)
         if _is_authenticated():
             u = _current_user()
+            if u and str(u.get('role') or '').strip().lower() == 'operator':
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        'success': False,
+                        'error': 'Accès réservé aux comptes gestion (export et tableau). Le compte caisse crée des QR depuis l’accueil.',
+                    }), 403
+                return redirect(url_for('index'))
             if not _profile_complete(u):
                 if request.endpoint == 'complete_profile':
                     return func(*args, **kwargs)
@@ -322,8 +392,12 @@ def require_admin_session(func):
     return wrapper
 
 
+# Alias historique (nom trompeur : ne vérifie pas un rôle « admin » système).
+require_admin_session = require_dashboard_session
+
+
 def require_operator_or_admin_session(func):
-    """Accueil et APIs métier : session requise."""
+    """Pages caisse + APIs création/impression : session requise (y compris rôle operator)."""
     @wraps(func)
     def wrapper(*args, **kwargs):
         if not site_auth_required():
@@ -362,12 +436,26 @@ def inject_session():
         'profile_incomplete': bool(u and not _profile_complete(u)),
     }
 
+def _warn_operator_admin_username_collision():
+    """Évite la confusion si deux mots de passe .env ciblent le même identifiant Firestore."""
+    a = (app.config.get('ADMIN_USERNAME') or 'admin').strip().lower()
+    o = (app.config.get('OPERATOR_USERNAME') or 'operator').strip().lower()
+    if a == o and (app.config.get('ADMIN_PASSWORD') and app.config.get('OPERATOR_PASSWORD')):
+        app.logger.warning(
+            "ADMIN_USERNAME et OPERATOR_USERNAME sont identiques (%s) alors que les deux mots de passe sont "
+            "définis : un seul compte Firestore existe ; utilisez des identifiants distincts.",
+            a,
+        )
+
+
 # Initialisation de la base de données
 def init_db():
     """Initialise les collections Firestore (schema-less)."""
     store.init_schema()
+    _warn_operator_admin_username_collision()
     ensure_legacy_admin_user()
     ensure_superadmin_user()
+    ensure_operator_user()
 
 
 @app.errorhandler(CSRFError)
@@ -513,6 +601,12 @@ def _invalidate_list_qr_cache_for_owner(owner_id):
                 _list_qr_resp_cache.pop(k, None)
 
 
+def _invalidate_list_qr_cache_all():
+    """Nettoyage global (ex. job expiration_ts) : tout compte peut être impacté."""
+    with _list_qr_resp_cache_lock:
+        _list_qr_resp_cache.clear()
+
+
 def _probe_printer_status():
     """Sonde réelle de l’imprimante (réseau/USB). Utilisé par /api/status et non mis en cache côté appelant impression."""
     printer_connected = False
@@ -577,6 +671,44 @@ def normalize_sn_mobile_phone(raw) -> str:
     if len(local) != 9 or local[:2] not in _SN_MOBILE_PREFIXES:
         raise ValueError(_SN_PHONE_ERR_MSG)
     return '+221' + local
+
+
+def sn_phone_local_display(raw) -> str:
+    """Partie locale 9 chiffres pour formulaires (+221…, 221… ou déjà 9 chiffres)."""
+    if raw is None:
+        return ''
+    s = str(raw).strip()
+    digits = ''.join(c for c in s if c.isdigit())
+    if len(digits) >= 12 and digits.startswith('221'):
+        return digits[3:12]
+    if len(digits) == 9:
+        return digits
+    if s.startswith('+221') and len(s) >= 13:
+        return ''.join(c for c in s[4:13] if c.isdigit())[:9]
+    return ''
+
+
+@app.template_filter('sn_phone_local')
+def sn_phone_local_filter(raw):
+    return sn_phone_local_display(raw)
+
+
+def format_iso_datetime_display(val):
+    """Affichage court pour created_at (ISO Firestore / Python)."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone().replace(tzinfo=None)
+        return dt.strftime('%d/%m/%Y à %H:%M')
+    except (ValueError, TypeError, OSError):
+        return s
 
 
 def expiration_delta_minus_one_second(delta: timedelta) -> timedelta:
@@ -1099,6 +1231,8 @@ def _login_session_from_user(user):
     session['full_name'] = str(user.get('full_name') or '')
     session['gym_name'] = str(user.get('gym_name') or '')
     session['phone'] = str(user.get('phone') or '')
+    session['secondary_phone'] = str(user.get('secondary_phone') or '')
+    session['email'] = str(user.get('email') or '')
     session['address'] = str(user.get('address') or '')
     session.permanent = True
 
@@ -1160,6 +1294,7 @@ def login():
     try:
         ensure_legacy_admin_user()
         ensure_superadmin_user()
+        ensure_operator_user()
     except Exception as e:
         app.logger.warning("Synchronisation comptes au login ignorée: %s", e)
 
@@ -1242,6 +1377,8 @@ def login():
                 session['full_name'] = str(user.get('full_name') or '')
                 session['gym_name'] = str(user.get('gym_name') or '')
                 session['phone'] = str(user.get('phone') or '')
+                session['secondary_phone'] = str(user.get('secondary_phone') or '')
+                session['email'] = str(user.get('email') or '')
                 session['address'] = str(user.get('address') or '')
                 session.permanent = True
                 nxt = _safe_next_url(request.form.get('next'))
@@ -1338,6 +1475,7 @@ def complete_profile():
             session['gym_name'] = gym_name
             session['full_name'] = gym_name
             session['phone'] = phone
+            session['secondary_phone'] = secondary_phone
             session['address'] = address
             return redirect(url_for('index'))
 
@@ -1345,6 +1483,105 @@ def complete_profile():
         'complete_profile.html',
         error=error,
         user=user,
+    )
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+@require_operator_or_admin_session
+def settings():
+    """Paramètres compte + structure (identifiant, email, tickets)."""
+    user = _current_user()
+    if not user:
+        return redirect_to_login()
+    if not _profile_complete(user):
+        return redirect(url_for('complete_profile'))
+
+    error = None
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip().lower()[:64]
+        email = (request.form.get('email') or '').strip().lower()
+        gym_name = (request.form.get('gym_name') or '').strip()
+        address = (request.form.get('address') or '').strip()
+
+        if not username:
+            error = 'L’identifiant de connexion est obligatoire.'
+        elif email and ('@' not in email or len(email) < 5):
+            error = 'Adresse email invalide.'
+        elif not all([gym_name, address]):
+            error = 'Le nom de la structure et l’adresse sont obligatoires.'
+        else:
+            existing_u = store.get_user_by_username(username)
+            if existing_u and str(existing_u.get('id')) != str(user.get('id')):
+                error = 'Cet identifiant est déjà utilisé.'
+        if not error and email:
+            other = store.get_user_by_email(email)
+            if other and str(other.get('id')) != str(user.get('id')):
+                error = 'Cette adresse email est déjà utilisée.'
+        if not error:
+            try:
+                phone = normalize_sn_mobile_phone(request.form.get('phone', ''))
+            except ValueError:
+                error = _SN_PHONE_ERR_MSG
+            secondary_phone = ''
+            if not error:
+                raw_sec = (request.form.get('secondary_phone') or '').strip()
+                if raw_sec:
+                    try:
+                        secondary_phone = normalize_sn_mobile_phone(raw_sec)
+                    except ValueError:
+                        error = _SN_PHONE_ERR_MSG
+                if not error and secondary_phone == phone:
+                    error = 'Le 2e numéro doit être différent du numéro principal.'
+            if not error:
+                by_phone = store.get_user_by_phone(phone)
+                if by_phone and str(by_phone.get('id')) != str(user.get('id')):
+                    error = 'Ce numéro de téléphone est déjà utilisé par un autre compte.'
+            if not error:
+                updates = {
+                    'username': username,
+                    'email': email,
+                    'gym_name': gym_name,
+                    'full_name': gym_name,
+                    'phone': phone,
+                    'secondary_phone': secondary_phone,
+                    'address': address,
+                }
+                new_pw = (request.form.get('new_password') or '').strip()
+                new_pw2 = (request.form.get('new_password_confirm') or '').strip()
+                cur_pw = request.form.get('current_password') or ''
+                if new_pw or new_pw2 or cur_pw:
+                    if not new_pw:
+                        error = 'Saisissez le nouveau mot de passe.'
+                    elif len(new_pw) < 8:
+                        error = 'Le nouveau mot de passe doit contenir au moins 8 caractères.'
+                    elif new_pw != new_pw2:
+                        error = 'La confirmation ne correspond pas au nouveau mot de passe.'
+                    elif not cur_pw:
+                        error = 'Saisissez votre mot de passe actuel pour le modifier.'
+                    else:
+                        pwd_hash = str(user.get('password_hash') or '')
+                        if not pwd_hash or not check_password_hash(pwd_hash, cur_pw):
+                            error = 'Mot de passe actuel incorrect.'
+                        else:
+                            updates['password_hash'] = generate_password_hash(new_pw)
+                if not error:
+                    store.update_user(user['id'], updates)
+                    session['username'] = username
+                    session['email'] = email
+                    session['gym_name'] = gym_name
+                    session['full_name'] = gym_name
+                    session['phone'] = phone
+                    session['secondary_phone'] = secondary_phone
+                    session['address'] = address
+                    if hasattr(g, '_qrprint_user'):
+                        g.pop('_qrprint_user', None)
+                    return redirect(url_for('settings', updated='1'))
+
+    return render_template(
+        'settings.html',
+        error=error,
+        user=user,
+        settings_created_display=format_iso_datetime_display(user.get('created_at')),
     )
 
 
@@ -1505,6 +1742,7 @@ def create_qr():
             'qr_data': signed_qr_data,
             'qr_hash': qr_hash,
             'expiration_date': expiration_date.isoformat(),
+            'expiration_ts': int(expiration_date.timestamp()),
             'created_at': created_iso,
             'printed_at': None,
             'is_active': True,
@@ -1577,11 +1815,13 @@ def print_qr(qr_id):
         if not verify_qr_signature(qr_record['qr_data']):
             return jsonify({'success': False, 'error': 'Signature QR invalide'}), 400
         
-        # Vérifier si expiré
+        # Vérifier si expiré ou désactivé (cleanup / révocation)
         expiration_date = datetime.fromisoformat(qr_record['expiration_date'])
         if datetime.now() > expiration_date:
             return jsonify({'success': False, 'error': 'QR Code expiré'}), 400
-        
+        if not bool(qr_record.get('is_active', True)):
+            return jsonify({'success': False, 'error': 'QR Code désactivé, impression impossible'}), 400
+
         printer = get_printer()
         if not printer:
             return jsonify({
@@ -1610,9 +1850,9 @@ def print_qr(qr_id):
         finally:
             try:
                 printer.close()
-            except:
+            except Exception:
                 pass
-                
+
     except GoogleAPICallError as e:
         return jsonify_firestore_error("print_qr", e)
     except Exception as e:
@@ -1905,6 +2145,8 @@ def cleanup_expired_qr():
     """Marque comme inactifs les QR Codes expirés"""
     try:
         count = store.cleanup_expired_qr()
+        if count:
+            _invalidate_list_qr_cache_all()
         app.logger.info(f"Nettoyage des QR Codes expirés effectué ({count} mis à jour)")
     except GoogleAPICallError as e:
         app.logger.warning("Nettoyage Firestore ignoré: %s", e)

@@ -223,7 +223,6 @@ async function downloadExport(format) {
 
 document.addEventListener('DOMContentLoaded', function() {
     loadQRCodes();
-    checkPrinterStatus();
 
     const createQrLink = document.getElementById('dashboardCreateQrLink');
     const homeUrl = document.body?.dataset?.appHome || '/';
@@ -350,31 +349,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     setInterval(loadQRCodes, DASHBOARD_REFRESH_MS);
-    setInterval(checkPrinterStatus, 30000);
 });
-
-async function checkPrinterStatus() {
-    try {
-        const response = await fetch('/api/status');
-        if (redirectToLoginIfUnauthorized(response)) return;
-        const data = await response.json();
-
-        const statusEl = document.getElementById('printerStatus');
-        const iconEl = document.getElementById('printerIcon');
-
-        if (statusEl && iconEl) {
-            if (data.success && data.printer_connected) {
-                statusEl.textContent = data.printer_info || 'Connectée';
-                iconEl.className = 'bi bi-printer me-2 connected';
-            } else {
-                statusEl.textContent = data.printer_info || 'Aucune imprimante détectée';
-                iconEl.className = 'bi bi-printer me-2 disconnected';
-            }
-        }
-    } catch (error) {
-        console.error('Erreur lors de la vérification de l\'imprimante:', error);
-    }
-}
 
 async function loadQRCodes() {
     const tbody = document.getElementById('qrTableBody');
@@ -547,13 +522,21 @@ function displayQRCodes(qrCodes, rowOffset) {
             'Expire: ' + (qr.expiration_date || ''),
             qr.is_expired ? 'Statut: Expiré' : 'Statut: Actif'
         ].filter(Boolean).join(' | ');
+        // Pas de title sur la ligne si QR inutilisable : sinon au survol du bouton Imprimer désactivé le navigateur affiche ce bloc entier.
+        const rowTitleAttr =
+            qr.is_expired || qr.is_active === false ? '' : ` title="${escapeAttr(rowTip)}"`;
 
-        const statusBadge = qr.is_expired
-            ? '<span class="badge bg-danger">Expiré</span>'
-            : '<span class="badge bg-success">Actif</span>';
+        let statusBadge;
+        if (qr.is_active === false && !qr.is_expired) {
+            statusBadge = '<span class="badge bg-secondary">Révoqué</span>';
+        } else if (qr.is_expired) {
+            statusBadge = '<span class="badge bg-danger">Expiré</span>';
+        } else {
+            statusBadge = '<span class="badge bg-success">Actif</span>';
+        }
 
         return `
-            <tr title="${escapeAttr(rowTip)}">
+            <tr${rowTitleAttr}>
                 <td class="text-center align-middle fw-semibold text-muted">${rowNum}</td>
                 <td class="text-start align-middle" title="${escapeAttr(clientNameRaw)}">${clientName}</td>
                 <td class="text-start align-middle" title="${escapeAttr(qr.client_phone || '')}">${phone}</td>
@@ -573,7 +556,7 @@ function displayQRCodes(qrCodes, rowOffset) {
                         <button type="button" class="btn btn-outline-success"
                                 onclick="reprintQRCode('${qr.id}')"
                                 title="Réimprimer"
-                                ${qr.is_expired ? 'disabled' : ''}>
+                                ${qr.is_expired || qr.is_active === false ? 'disabled' : ''}>
                             <i class="bi bi-printer"></i>
                         </button>
                         <button type="button" class="btn btn-outline-danger"

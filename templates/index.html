@@ -24,9 +24,16 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
+                    {% if current_role != 'operator' %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                     </li>
+                    {% endif %}
+                    {% if current_role %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('settings') }}">Paramètres</a>
+                    </li>
+                    {% endif %}
                     {% if not current_role and site_auth_required %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login', next=request.path) }}">Connexion</a>
@@ -40,22 +47,25 @@
                         </form>
                     </li>
                     {% endif %}
-                    <li class="nav-item ms-3">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-printer me-2 disconnected" id="printerIcon"></i>
-                            <div class="printer-status-text">
-                                <strong>Imprimante:</strong>
-                                <span id="printerStatus">Vérification...</span>
-                            </div>
-                        </div>
-                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container my-5">
-        <div class="row g-4 index-qr-main-row">
+    <div class="index-printer-bar mb-0">
+        <div class="container text-center">
+            <div class="d-inline-flex align-items-center justify-content-center gap-2 flex-wrap">
+                <i class="bi bi-printer disconnected" id="printerIcon" aria-hidden="true"></i>
+                <div class="printer-status-text small mb-0">
+                    <strong>Imprimante :</strong>
+                    <span id="printerStatus">Vérification...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container index-main-wrap mb-5">
+        <div class="row gx-4 gy-3 gy-lg-0 index-qr-main-row">
             <!-- Colonne gauche : Formulaire -->
             <div class="col-lg-6 d-flex align-items-stretch">
                 <div class="card shadow-lg index-qr-card flex-fill w-100">

@@ -89,10 +89,16 @@ class Config:
     SUPERADMIN_ADDRESS = os.environ.get('SUPERADMIN_ADDRESS') or ''
     OPERATOR_USERNAME = os.environ.get('OPERATOR_USERNAME') or 'operator'
     OPERATOR_PASSWORD = os.environ.get('OPERATOR_PASSWORD')
+    # Profil minimal Firestore pour le compte caisse (connexion autorisée sans formulaire structure).
+    OPERATOR_GYM_NAME = (os.environ.get('OPERATOR_GYM_NAME') or 'Caisse').strip()
+    OPERATOR_PHONE = (os.environ.get('OPERATOR_PHONE') or '+221770000000').strip()
+    OPERATOR_ADDRESS = (os.environ.get('OPERATOR_ADDRESS') or '-').strip()
     SESSION_HOURS = _SESSION_HOURS
     PERMANENT_SESSION_LIFETIME = timedelta(hours=SESSION_HOURS)
     EXPORT_MAX_ROWS = int(os.environ.get('EXPORT_MAX_ROWS', '5000'))
-    # Tableau dashboard : documents Firestore max lus avant filtres Python, puis pagination.
+    # Tableau dashboard : plafond de lectures Firestore par requête liste.
+    # — Filtres « Actif » / « Expiré » : requêtes indexées (expiration_ts), puis tri affichage par created_at.
+    # — Filtre « Tous » : uniquement les LIST_QR_FETCH_MAX tickets les plus récents (created_at), pas l’historique infini.
     # Rétrocompat : LIST_QR_MAX_ROWS utilisé si LIST_QR_FETCH_MAX absent.
     LIST_QR_FETCH_MAX = int(os.environ.get('LIST_QR_FETCH_MAX') or os.environ.get('LIST_QR_MAX_ROWS') or '3000')
     LIST_QR_PER_PAGE = int(os.environ.get('LIST_QR_PER_PAGE', '15'))

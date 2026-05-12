@@ -147,7 +147,9 @@ QrCodePrint/
 ├── app.py                 # Application Flask principale
 ├── config.py              # Configuration
 ├── requirements.txt       # Dépendances Python
-├── database.db            # Base de données SQLite (créée automatiquement)
+├── firestore.indexes.json  # Index Firestore (déploiement Firebase)
+├── services/datastore.py   # Accès Firestore
+├── tests/                  # Tests pytest (optionnel, requirements-dev.txt)
 │
 ├── templates/             # Templates HTML
 │   ├── index.html        # Page d'accueil
@@ -233,10 +235,10 @@ GET /api/status
 - Testez avec une **autre application** (Bloc-notes → Imprimer)
 - Vérifiez les **pilotes** de l'imprimante
 
-### Erreur de base de données
+### Erreur Firestore / GCP
 
-- Supprimez `database.db` et relancez l'application (re-création automatique)
-- Vérifiez les permissions d'écriture dans le dossier du projet
+- Vérifiez `FIRESTORE_PROJECT_ID`, les credentials (`GOOGLE_APPLICATION_CREDENTIALS` ou JSON en env) et les **rôles IAM** du compte de service (ex. « Cloud Datastore User »).
+- Déployez les **index** composites (`firebase deploy --only firestore:indexes` ou lien dans le message d’erreur Firestore).
 
 ### Le QR Code ne s'imprime pas correctement
 
@@ -248,10 +250,7 @@ GET /api/status
 
 ### Recommandations
 
-1. **Changer la SECRET_KEY** dans `config.py` :
-   ```python
-   SECRET_KEY = os.environ.get('SECRET_KEY') or 'votre-cle-secrete-tres-longue-et-aleatoire'
-   ```
+1. **Définir `SECRET_KEY` et `QR_SIGNATURE_KEY`** dans les variables d’environnement (longues valeurs aléatoires), pas en dur dans le code.
 
 2. **Utiliser un serveur WSGI** (Gunicorn, uWSGI) :
    ```bash
@@ -263,9 +262,9 @@ GET /api/status
 
 4. **Utiliser HTTPS** avec un certificat SSL
 
-5. **Sauvegarder régulièrement** `database.db`
+5. **Sauvegarder** votre projet GCP / exports Firestore selon votre politique.
 
-6. **Configurer un cron job** pour nettoyer les QR Codes expirés (optionnel, déjà géré dans l'app)
+6. **Configurer un cron job** pour nettoyer les QR Codes expirés (optionnel ; l’app peut aussi lancer un nettoyage au démarrage)
 
 ### Variables d'environnement recommandées
 
@@ -283,27 +282,30 @@ Variables minimales à définir en production :
 
 - `ADMIN_PASSWORD` : obligatoire pour protéger le dashboard et les APIs admin
 - `ADMIN_USERNAME` : optionnel (défaut: `admin`)
-- `OPERATOR_PASSWORD` : compte « opérateur » (création / impression sans dashboard). Dès que **ce mot de passe ou** `ADMIN_PASSWORD` est défini, **toute l'application** (accueil, APIs, dashboard) exige une connexion. Laisser les deux vides uniquement en développement local.
-- `OPERATOR_USERNAME` : optionnel (défaut: `operator`)
+- `OPERATOR_PASSWORD` : mot de passe du **compte caisse** (créé dans Firestore au démarrage si défini). Ce compte se connecte sur `/login` comme les autres mais **n’a pas accès** au tableau de bord ni à l’export : uniquement l’accueil (formulaire + impression). Définir aussi `OPERATOR_USERNAME` (défaut `operator`) et, au besoin, `OPERATOR_GYM_NAME`, `OPERATOR_PHONE`, `OPERATOR_ADDRESS` pour le profil minimal stocké en base. **`ADMIN_USERNAME` et `OPERATOR_USERNAME` doivent être différents** (un identifiant = un document utilisateur).
+- Dès que **`ADMIN_PASSWORD` ou `OPERATOR_PASSWORD`** est défini, **toute l’application** exige une connexion. Laisser les deux vides uniquement en développement local si vous acceptez l’accès sans login.
+- `LIST_QR_FETCH_MAX` : plafond de lectures Firestore par chargement de liste. Les filtres **Actif** / **Expiré** utilisent des requêtes indexées (`expiration_ts`). Le filtre **Tous** reste limité aux tickets les plus récents jusqu’à ce plafond (voir commentaires dans `config.py`).
+- `LIST_QR_RESPONSE_CACHE_SECONDS` : cache des réponses GET `/api/list_qr` ; invalidé après création, suppression, impression, rattachement de QR sans propriétaire, et après le nettoyage des expirés.
 - `SESSION_HOURS` : durée de session en heures (défaut: `12`)
 - `SECRET_KEY` : clé Flask (session/CSRF), longue et aléatoire
 - `QR_SIGNATURE_KEY` : clé HMAC pour signer les QR codes, longue et aléatoire
 - `FLASK_DEBUG=0` : ne pas exposer le mode debug
 
-Connexion web : page `/login` (sessions Flask). Après connexion, chaque utilisateur accède au site selon son compte (admin : dashboard + tout ; opérateur : accueil et impression). Export CSV/Excel et filtres depuis le dashboard.
+Connexion web : page `/login` (sessions Flask). **Comptes gestion** (inscription salle, admin `.env`, superadmin) : accueil + dashboard + export. **Compte opérateur** : accueil + APIs création/impression uniquement.
 
 ### Checklist sécurité production
 
 - Activer HTTPS derrière un reverse proxy (Nginx/Apache/Caddy)
 - Restreindre l'accès au dashboard admin (réseau interne/VPN si possible)
-- Sauvegarder régulièrement `database.db`
+- Sauvegarder Firestore / votre projet GCP ; l’app ne repose plus sur `database.db` pour les données métier
 - Mettre à jour les dépendances Python périodiquement
 - Surveiller les logs applicatifs et les erreurs d'impression
 
 ## 📝 Notes Techniques
 
-- **Base de données** : SQLite pour simplicité (peut être migrée vers PostgreSQL/MySQL)
-- **QR Codes** : Utilise la bibliothèque `qrcode` avec correction d'erreur niveau M
+- **Données** : Google **Firestore** (utilisateurs, QR codes). Variable `FIRESTORE_COLLECTION_PREFIX` (défaut `qrprint`). Script optionnel `scripts/backfill_expiration_ts.py` pour les anciens documents sans champ `expiration_ts`. Index composites décrits dans `firestore.indexes.json`.
+- **Traçage HTTP** : en-tête de réponse **`X-Request-ID`** (corrélation des logs).
+- **QR Codes** : bibliothèque `qrcode` avec correction d'erreur niveau M
 - **Impression** : Bibliothèque `python-escpos` pour compatibilité ESC/POS
 - **Frontend** : Bootstrap 5 + JavaScript vanilla (pas de framework JS)
 

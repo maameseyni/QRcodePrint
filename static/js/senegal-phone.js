@@ -47,6 +47,44 @@
         global.syncSenegalPhoneHiddenField(localInput, hiddenInput, optionalField);
     };
 
+    function showSenegalPhoneToast(title, message, type) {
+        type = type || 'warning';
+        message = message || global.SN_PHONE_ERR;
+        var toast = document.getElementById('toast');
+        var toastTitle = document.getElementById('toastTitle');
+        var toastBody = document.getElementById('toastBody');
+        if (
+            toast &&
+            toastTitle &&
+            toastBody &&
+            typeof bootstrap !== 'undefined' &&
+            bootstrap.Toast
+        ) {
+            toast.className = 'toast';
+            if (type === 'success') {
+                toast.classList.add('text-bg-success');
+            } else if (type === 'danger' || type === 'error') {
+                toast.classList.add('text-bg-danger');
+            } else if (type === 'warning') {
+                toast.classList.add('text-bg-warning');
+            } else {
+                toast.classList.add('text-bg-info');
+            }
+            toastTitle.textContent = title || 'Notification';
+            toastBody.textContent = message;
+            try {
+                new bootstrap.Toast(toast).show();
+            } catch (err) {
+                window.alert(message);
+            }
+            return;
+        }
+        window.alert(message);
+    }
+
+    /** Même toast que création QR / téléphones (réutilisable hors senegal-phone.js). */
+    global.showAppToast = showSenegalPhoneToast;
+
     /**
      * Formulaires inscription / compléter profil : paires local + hidden, validation au submit.
      */
@@ -74,7 +112,7 @@
             var d = pl.value;
             if (!validateSenegalPhoneLocal(d)) {
                 e.preventDefault();
-                alert(global.SN_PHONE_ERR);
+                showSenegalPhoneToast('Erreur', global.SN_PHONE_ERR, 'warning');
                 pl.focus();
                 return;
             }
@@ -84,20 +122,24 @@
                 var d2 = sl.value;
                 if (d2.length > 0 && d2.length < LEN) {
                     e.preventDefault();
-                    alert(global.SN_PHONE_ERR);
+                    showSenegalPhoneToast('Erreur', global.SN_PHONE_ERR, 'warning');
                     sl.focus();
                     return;
                 }
                 if (d2.length === LEN) {
                     if (!validateSenegalPhoneLocal(d2)) {
                         e.preventDefault();
-                        alert(global.SN_PHONE_ERR);
+                        showSenegalPhoneToast('Erreur', global.SN_PHONE_ERR, 'warning');
                         sl.focus();
                         return;
                     }
                     if ('+221' + d2 === ph.value) {
                         e.preventDefault();
-                        alert('Le 2e numéro doit être différent du numéro principal.');
+                        showSenegalPhoneToast(
+                            'Erreur',
+                            'Le 2e numéro doit être différent du numéro principal.',
+                            'warning'
+                        );
                         sl.focus();
                         return;
                     }
@@ -128,6 +170,16 @@
                 'complete_phone_hidden',
                 'complete_secondary_local',
                 'complete_secondary_hidden'
+            );
+        }
+        var settingsForm = document.querySelector('.neumo-settings-form');
+        if (settingsForm) {
+            global.bindSenegalDualPhoneForm(
+                settingsForm,
+                'settings_phone_local',
+                'settings_phone_hidden',
+                'settings_secondary_local',
+                'settings_secondary_hidden'
             );
         }
     }

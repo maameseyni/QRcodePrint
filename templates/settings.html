@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Paramètres — QR Code Print</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="page-settings">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white custom-navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-qr-code-scan"></i> QR Code Print
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavSettings">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNavSettings">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Accueil</a>
+                    </li>
+                    {% if current_role != 'operator' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('settings') }}" aria-current="page">Paramètres</a>
+                    </li>
+                    {% if current_role %}
+                    <li class="nav-item">
+                        <form method="post" action="{{ url_for('logout') }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link nav-link py-0">Déconnexion ({{ current_gym_name or current_full_name or current_user or current_role }})</button>
+                        </form>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="settings-page-head mb-4">
+            <h1 class="settings-page-title h3 mb-1">
+                <i class="bi bi-gear settings-title-icon" aria-hidden="true"></i>Paramètres
+            </h1>
+            <p class="settings-page-subtitle text-muted small mb-0">Nom de la structure (sur les tickets), identifiant, email et coordonnées.</p>
+        </div>
+
+        {% if request.args.get('updated') %}
+        <div class="alert alert-success py-2 small mb-4" role="alert">
+            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Modifications enregistrées.
+        </div>
+        {% endif %}
+        {% if error %}
+        <script type="application/json" id="settings-flash-error">{{ error | tojson }}</script>
+        {% endif %}
+
+        <div class="card shadow-lg index-qr-card settings-account-card">
+            <div class="card-header bg-primary text-white">
+                <h2 class="card-title h5 mb-0"><i class="bi bi-pencil-square me-2" aria-hidden="true"></i>Vos informations</h2>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" action="{{ url_for('settings') }}" class="neumo-settings-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label" for="settings_gym_name">Nom</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-building" aria-hidden="true"></i></span>
+                                <input type="text" class="form-control border-start-0" id="settings_gym_name" name="gym_name" value="{{ user.get('gym_name','') }}" placeholder="Nom de la structure (affiché sur les tickets)" required autocomplete="organization">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="settings_username">Identifiant de connexion</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-person" aria-hidden="true"></i></span>
+                                <input type="text" class="form-control border-start-0" id="settings_username" name="username" value="{{ user.get('username','') }}" maxlength="64" required autocomplete="username" spellcheck="false">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="settings_email">Email</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-envelope" aria-hidden="true"></i></span>
+                                <input type="email" class="form-control border-start-0" id="settings_email" name="email" value="{{ user.get('email','') }}" placeholder="optionnel" autocomplete="email">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="settings_phone_local">Téléphone principal</label>
+                            <div class="input-group">
+                                <span class="input-group-text phone-sn-prefix" id="settingsPhonePrefix"><span class="phone-sn-cc">+221</span></span>
+                                <input type="tel" class="form-control border-start-0" id="settings_phone_local"
+                                       maxlength="9" minlength="9" inputmode="numeric" pattern="[0-9]{9}"
+                                       value="{{ (user.get('phone') or '')|sn_phone_local }}" required autocomplete="tel-national"
+                                       aria-label="Téléphone principal"
+                                       aria-describedby="settingsPhonePrefix">
+                            </div>
+                            <input type="hidden" name="phone" id="settings_phone_hidden" value="">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="settings_secondary_local">2<sup>e</sup> numéro <span class="text-muted fw-normal">(optionnel)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text phone-sn-prefix" id="settingsSecPrefix"><span class="phone-sn-cc">+221</span></span>
+                                <input type="tel" class="form-control border-start-0" id="settings_secondary_local"
+                                       maxlength="9" inputmode="numeric" pattern="[0-9]{9}"
+                                       value="{{ (user.get('secondary_phone') or '')|sn_phone_local }}" placeholder="Optionnel" autocomplete="tel-national"
+                                       aria-label="Deuxième numéro"
+                                       aria-describedby="settingsSecPrefix">
+                            </div>
+                            <input type="hidden" name="secondary_phone" id="settings_secondary_hidden" value="">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="settings_address">Adresse</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-geo-alt" aria-hidden="true"></i></span>
+                                <input type="text" class="form-control border-start-0" id="settings_address" name="address" value="{{ user.get('address','') }}" placeholder="Adresse complète" required autocomplete="street-address">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="settings_current_password">Mot de passe actuel</label>
+                            <input type="password" class="form-control" id="settings_current_password" name="current_password" autocomplete="current-password">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="settings_new_password">Nouveau mot de passe</label>
+                            <input type="password" class="form-control" id="settings_new_password" name="new_password" minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="settings_new_password_confirm">Confirmer le nouveau</label>
+                            <input type="password" class="form-control" id="settings_new_password_confirm" name="new_password_confirm" minlength="8" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-0 mt-2">Laissez vide pour ne pas le modifier. Sinon : mot de passe actuel, puis nouveau (8 caractères minimum) et confirmation.</p>
+
+                    {% if settings_created_display %}
+                    <div class="settings-readonly-notes mt-3" aria-live="polite">
+                        <p class="small text-muted mb-0">Date de création du compte : {{ settings_created_display }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex flex-wrap gap-2 mt-4 pt-3 border-top border-light-subtle">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Enregistrer
+                        </button>
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Retour à l’accueil</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Fermer"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
+    <script>
+    (function () {
+        function toastErr(msg) {
+            if (typeof showAppToast === 'function') {
+                showAppToast('Erreur', msg, 'warning');
+            } else {
+                window.alert(msg);
+            }
+        }
+        var flash = document.getElementById('settings-flash-error');
+        if (flash) {
+            try {
+                var raw = flash.textContent.trim();
+                if (raw) {
+                    var msg = JSON.parse(raw);
+                    if (msg) toastErr(String(msg));
+                }
+            } catch (e) {}
+            flash.remove();
+        }
+        var form = document.querySelector('.neumo-settings-form');
+        if (!form) return;
+        form.addEventListener('submit', function (ev) {
+            var curEl = document.getElementById('settings_current_password');
+            var n1El = document.getElementById('settings_new_password');
+            var n2El = document.getElementById('settings_new_password_confirm');
+            var curT = (curEl && curEl.value) ? curEl.value.trim() : '';
+            var n1T = (n1El && n1El.value) ? n1El.value.trim() : '';
+            var n2T = (n2El && n2El.value) ? n2El.value.trim() : '';
+            if (!curT && !n1T && !n2T) return;
+            if (!n1T) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                toastErr('Saisissez le nouveau mot de passe.');
+                if (n1El) n1El.focus();
+                return;
+            }
+            if (n1T.length < 8) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                toastErr('Le nouveau mot de passe doit contenir au moins 8 caractères.');
+                if (n1El) n1El.focus();
+                return;
+            }
+            if (n1T !== n2T) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                toastErr('La confirmation ne correspond pas au nouveau mot de passe.');
+                if (n2El) n2El.focus();
+                return;
+            }
+            if (!curT) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                toastErr('Saisissez votre mot de passe actuel pour le modifier.');
+                if (curEl) curEl.focus();
+                return;
+            }
+        }, true);
+    })();
+    </script>
+</body>
+</html>

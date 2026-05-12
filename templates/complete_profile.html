@@ -27,10 +27,6 @@
                             <input type="text" class="form-control neumo-input" name="gym_name" value="{{ user.get('gym_name','') }}" placeholder="Nom de la structure" required autocomplete="organization">
                         </div>
                     </div>
-                    {% set _ph = user.get('phone') or '' %}
-                    {% set _ph_loc = (_ph[4:] if _ph.startswith('+221') else '') %}
-                    {% set _ph2 = user.get('secondary_phone') or '' %}
-                    {% set _ph2_loc = (_ph2[4:] if _ph2.startswith('+221') else '') %}
                     <div class="col-12 col-md-6">
                         <div class="neumo-input-wrap">
                             <div class="input-group flex-grow-1">
@@ -40,7 +36,7 @@
                                 </span>
                                 <input type="tel" class="form-control neumo-input border-start-0" id="complete_phone_local"
                                        maxlength="9" minlength="9" inputmode="numeric" pattern="[0-9]{9}"
-                                       value="{{ _ph_loc }}" placeholder="Téléphone" required autocomplete="tel-national"
+                                       value="{{ (user.get('phone') or '')|sn_phone_local }}" placeholder="Téléphone" required autocomplete="tel-national"
                                        aria-label="Téléphone"
                                        aria-describedby="completePhonePrefix">
                             </div>
@@ -56,7 +52,7 @@
                                 </span>
                                 <input type="tel" class="form-control neumo-input border-start-0" id="complete_secondary_local"
                                        maxlength="9" inputmode="numeric" pattern="[0-9]{9}"
-                                       value="{{ _ph2_loc }}" placeholder="2e numéro (optionnel)" autocomplete="tel-national"
+                                       value="{{ (user.get('secondary_phone') or '')|sn_phone_local }}" placeholder="2e numéro (optionnel)" autocomplete="tel-national"
                                        aria-label="Deuxième numéro (optionnel)"
                                        aria-describedby="completeSecPrefix">
                             </div>
@@ -75,6 +71,16 @@
             </form>
         </section>
     </main>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Fermer"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
 </body>
 </html>

@@ -7,6 +7,40 @@
         { "fieldPath": "owner_id", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "expiration_ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "expiration_ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "expiration_ts", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

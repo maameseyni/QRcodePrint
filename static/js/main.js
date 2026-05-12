@@ -351,6 +351,7 @@ async function checkPrinterStatus() {
 
         const statusEl = document.getElementById('printerStatus');
         const iconEl = document.getElementById('printerIcon');
+        if (!statusEl || !iconEl) return;
 
         if (data.success && data.printer_connected) {
             statusEl.textContent = data.printer_info || 'Connectée';
@@ -362,7 +363,7 @@ async function checkPrinterStatus() {
     } catch (error) {
         console.error('Erreur lors de la vérification de l\'imprimante:', error);
         const statusEl = document.getElementById('printerStatus');
-        statusEl.textContent = 'Erreur de vérification';
+        if (statusEl) statusEl.textContent = 'Erreur de vérification';
     }
 }
 

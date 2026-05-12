@@ -54,9 +54,23 @@ body > .container {
     margin-top: 1.5rem !important;
 }
 
-/* Page création QR : écart sous la navbar (réduit pour remonter un peu les deux cartes) */
+/* Page création QR : pas d’écart supplémentaire (remonte les deux cartes sous la ligne imprimante) */
 .index-qr-main-row {
-    margin-top: 0.65cm;
+    margin-top: 0;
+}
+
+/* Accueil : remonte le bloc des deux cartes (compense le padding de la ligne imprimante pour que les cartes ne bougent pas) */
+body > .container.index-main-wrap {
+    margin-top: -1.15rem !important;
+}
+
+.index-printer-bar {
+    line-height: 1.15;
+    padding-top: 0.5rem;
+}
+
+.index-printer-bar .printer-status-text.small {
+    line-height: 1.15;
 }
 
 /* Les deux cartes (Créer un QR | Ticket & QR) : même rayon (la carte formulaire a overflow:visible pour les menus) */
@@ -772,6 +786,37 @@ select.form-select:-webkit-autofill:focus {
 
 .page-dashboard .dashboard-page-subtitle {
     max-width: 26rem;
+}
+
+/* —— Paramètres (aligné dashboard / cartes index) —— */
+.page-settings .settings-page-title {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--primary-dark);
+}
+
+.page-settings .settings-title-icon {
+    color: var(--primary-dark);
+    margin-right: 0.35rem;
+}
+
+.page-settings .settings-page-subtitle {
+    max-width: 36rem;
+}
+
+.page-settings .settings-account-card .form-control {
+    border-radius: 10px;
+}
+
+.page-settings .settings-readonly-notes {
+    max-width: 36rem;
+}
+
+.page-settings .settings-readonly-notes p {
+    font-size: 0.8125rem;
+    color: rgba(33, 37, 41, 0.58);
+    letter-spacing: 0.01em;
+    line-height: 1.45;
 }
 
 .dashboard-filters-card {

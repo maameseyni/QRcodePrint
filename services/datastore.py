@@ -3,13 +3,42 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from firebase_admin import credentials, firestore, get_app, initialize_app
+from google.api_core.exceptions import GoogleAPICallError
 from google.cloud.firestore import FieldFilter
+
+logger = logging.getLogger(__name__)
+
+
+def _iso_datetime_to_ts(iso_val: Any) -> Optional[int]:
+    """Convertit expiration_date (ISO) en epoch secondes pour requêtes Firestore."""
+    if iso_val is None:
+        return None
+    s = str(iso_val).strip()
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def _now_ts() -> int:
+    """
+    Horloge alignée sur la création des QR dans app.py : expiration_ts utilise
+    int(expiration_date.timestamp()) avec expiration_date = datetime.now() + delta (naïf, fuseau serveur).
+    Ne pas utiliser utcnow() ici sans avoir migré les timestamps stockés.
+    """
+    return int(datetime.now().timestamp())
 
 
 @dataclass
@@ -201,6 +230,10 @@ class FirestoreDataStore:
         record.setdefault("created_at", datetime.utcnow().isoformat())
         record.setdefault("printed_at", None)
         record.setdefault("is_active", True)
+        if record.get("expiration_date") is not None and record.get("expiration_ts") is None:
+            ts = _iso_datetime_to_ts(record.get("expiration_date"))
+            if ts is not None:
+                record["expiration_ts"] = ts
         self._col("qr_codes").document(record["id"]).set(record)
         return record["id"]
 
@@ -216,6 +249,10 @@ class FirestoreDataStore:
             record["is_active"] = bool(ia) if ia is not None else True
         if record.get("printed_at") in ("", None):
             record["printed_at"] = None
+        if record.get("expiration_date") is not None and record.get("expiration_ts") is None:
+            ts = _iso_datetime_to_ts(record.get("expiration_date"))
+            if ts is not None:
+                record["expiration_ts"] = ts
         self._col("qr_codes").document(str(record["id"])).set(record)
 
     def get_qr(self, qr_id: str, owner_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -246,25 +283,105 @@ class FirestoreDataStore:
         ref.delete()
         return True
 
-    def list_qr(self, filters: QueryFilters, owner_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        # Tri + limite côté requête ; owner_id dans la requête Firestore (multi-tenant, pas de scan global).
-        query = self._col("qr_codes")
-        if owner_id:
-            oid = str(owner_id).strip()
-            if oid:
-                query = query.where(filter=FieldFilter("owner_id", "==", oid))
-        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
-        docs = query.limit(max(filters.limit, 1)).stream()
+    def _sort_rows_by_created_at_desc(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        def sort_key(r: Dict[str, Any]) -> str:
+            return str(r.get("created_at") or "")
+
+        return sorted(rows, key=sort_key, reverse=True)
+
+    def _stream_limited(self, query, max_docs: int, label: str) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        for doc in docs:
+        for i, doc in enumerate(query.stream()):
+            if i >= max_docs:
+                logger.warning("%s: plafond LIST_QR_FETCH_MAX atteint (%s documents lus)", label, max_docs)
+                break
             item = doc.to_dict() or {}
             item.setdefault("id", doc.id)
             rows.append(item)
-        filtered = self._apply_filters(rows, filters)
-        return filtered
+        return rows
+
+    def _list_qr_legacy_created_window(self, oid: str, cap: int) -> List[Dict[str, Any]]:
+        """Repli : N derniers docs par created_at (anciens tickets sans expiration_ts)."""
+        query = self._col("qr_codes")
+        query = query.where(filter=FieldFilter("owner_id", "==", oid))
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+        return self._stream_limited(query, cap, "list_qr legacy created_at")
+
+    def _fetch_rows_active(self, oid: str, cap: int) -> List[Dict[str, Any]]:
+        """QR encore valides : index expiration_ts + is_active (tri affichage = created_at)."""
+        now_ts = _now_ts()
+        q = self._col("qr_codes")
+        q = q.where(filter=FieldFilter("owner_id", "==", oid))
+        q = q.where(filter=FieldFilter("is_active", "==", True))
+        q = q.where(filter=FieldFilter("expiration_ts", ">", now_ts))
+        q = q.order_by("expiration_ts", direction=firestore.Query.DESCENDING)
+        rows = self._stream_limited(q, cap, "list_qr active")
+        return self._sort_rows_by_created_at_desc(rows)
+
+    def _fetch_rows_all(self, oid: str, cap: int) -> List[Dict[str, Any]]:
+        q = self._col("qr_codes")
+        q = q.where(filter=FieldFilter("owner_id", "==", oid))
+        q = q.order_by("created_at", direction=firestore.Query.DESCENDING)
+        return self._stream_limited(q, cap, "list_qr tous")
+
+    def _fetch_rows_expired(self, oid: str, cap: int) -> List[Dict[str, Any]]:
+        """Réunion : désactivés OU date dépassée (expiration_ts). Dédup par id."""
+        now_ts = _now_ts()
+        by_id: Dict[str, Dict[str, Any]] = {}
+
+        q_inactive = self._col("qr_codes")
+        q_inactive = q_inactive.where(filter=FieldFilter("owner_id", "==", oid))
+        q_inactive = q_inactive.where(filter=FieldFilter("is_active", "==", False))
+        q_inactive = q_inactive.order_by("created_at", direction=firestore.Query.DESCENDING)
+        for row in self._stream_limited(q_inactive, cap, "list_qr expirés (inactifs)"):
+            by_id[str(row.get("id"))] = row
+
+        q_date = self._col("qr_codes")
+        q_date = q_date.where(filter=FieldFilter("owner_id", "==", oid))
+        q_date = q_date.where(filter=FieldFilter("expiration_ts", "<=", now_ts))
+        q_date = q_date.order_by("expiration_ts", direction=firestore.Query.DESCENDING)
+        for row in self._stream_limited(q_date, cap, "list_qr expirés (date)"):
+            by_id[str(row.get("id"))] = row
+
+        rows = list(by_id.values())
+        return self._sort_rows_by_created_at_desc(rows)
+
+    def list_qr(self, filters: QueryFilters, owner_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Liste filtrée : requêtes Firestore alignées sur le statut (plus seulement les N derniers créés).
+        Nécessite le champ expiration_ts sur les documents (rempli à la création / import).
+        """
+        cap = max(filters.limit, 1)
+        ft = (filters.filter_type or "all").strip().lower()
+        if ft not in ("all", "active", "expired"):
+            ft = "all"
+
+        oid = str(owner_id or "").strip()
+        if not oid:
+            query = self._col("qr_codes")
+            query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+            rows = self._stream_limited(query, cap, "list_qr sans owner")
+            return self._apply_filters(rows, filters)
+
+        rows: List[Dict[str, Any]] = []
+        try:
+            if ft == "active":
+                rows = self._fetch_rows_active(oid, cap)
+            elif ft == "expired":
+                rows = self._fetch_rows_expired(oid, cap)
+            else:
+                rows = self._fetch_rows_all(oid, cap)
+        except GoogleAPICallError:
+            raise
+        except Exception as e:
+            logger.warning("list_qr requête indexée impossible (%s), repli fenêtre created_at: %s", ft, e)
+            rows = self._list_qr_legacy_created_window(oid, cap)
+
+        return self._apply_filters(rows, filters)
 
     def _apply_filters(self, rows: List[Dict[str, Any]], filters: QueryFilters) -> List[Dict[str, Any]]:
-        now = datetime.utcnow()
+        # Aligné sur expiration_date stockée (datetime.now().isoformat() à la création).
+        now = datetime.now()
         out: List[Dict[str, Any]] = []
         search_l = (filters.search or "").strip().lower()
         ticket_l = (filters.ticket or "").strip().lower()
@@ -317,16 +434,15 @@ class FirestoreDataStore:
         return out
 
     def cleanup_expired_qr(self) -> int:
-        rows = self.list_qr(QueryFilters(filter_type="active", limit=10000))
-        now = datetime.utcnow()
+        """Désactive les QR dont expiration_ts est dépassé (champ requis pour la requête)."""
+        now_ts = _now_ts()
+        q = self._col("qr_codes")
+        q = q.where(filter=FieldFilter("is_active", "==", True))
+        q = q.where(filter=FieldFilter("expiration_ts", "<=", now_ts))
+        q = q.order_by("expiration_ts", direction=firestore.Query.DESCENDING)
         count = 0
-        for row in rows:
-            try:
-                exp_dt = datetime.fromisoformat(str(row.get("expiration_date")))
-            except Exception:
-                continue
-            if now > exp_dt and bool(row.get("is_active", True)):
-                self._col("qr_codes").document(row["id"]).update({"is_active": False})
-                count += 1
+        for doc in q.stream():
+            self._col("qr_codes").document(doc.id).update({"is_active": False})
+            count += 1
         return count
 
