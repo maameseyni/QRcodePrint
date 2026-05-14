@@ -26,13 +26,20 @@
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if current_role != 'operator' %}
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('tickets') }}">Tickets</a>
+                    </li>
+                    {% endif %}
+                    {% if can_manage_settings %}
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                     </li>
                     {% endif %}
                     {% if current_role %}
+                    {% if can_manage_settings %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('settings') }}">Paramètres</a>
                     </li>
+                    {% endif %}
                     {% endif %}
                     {% if not current_role and site_auth_required %}
                     <li class="nav-item">

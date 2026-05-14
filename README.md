@@ -153,14 +153,15 @@ QrCodePrint/
 │
 ├── templates/             # Templates HTML
 │   ├── index.html        # Page d'accueil
-│   └── dashboard.html    # Dashboard admin
+│   ├── tickets.html      # Liste des tickets (filtres, export)
+│   └── dashboard.html    # Tableau de bord propriétaire (en construction)
 │
 └── static/               # Fichiers statiques
     ├── css/
     │   └── style.css     # Styles personnalisés
     ├── js/
     │   ├── main.js       # Script page d'accueil
-    │   └── dashboard.js  # Script dashboard
+    │   └── tickets.js    # Script liste des tickets
     └── qr/               # Dossier pour stocker les QR Codes (auto-créé)
 ```
 
@@ -280,9 +281,9 @@ cp .env.example .env
 
 Variables minimales à définir en production :
 
-- `ADMIN_PASSWORD` : obligatoire pour protéger le dashboard et les APIs admin
+- `ADMIN_PASSWORD` : obligatoire pour protéger les pages gestion (liste tickets, dashboard propriétaire, paramètres) et les APIs associées
 - `ADMIN_USERNAME` : optionnel (défaut: `admin`)
-- `OPERATOR_PASSWORD` : mot de passe du **compte caisse** (créé dans Firestore au démarrage si défini). Ce compte se connecte sur `/login` comme les autres mais **n’a pas accès** au tableau de bord ni à l’export : uniquement l’accueil (formulaire + impression). Définir aussi `OPERATOR_USERNAME` (défaut `operator`) et, au besoin, `OPERATOR_GYM_NAME`, `OPERATOR_PHONE`, `OPERATOR_ADDRESS` pour le profil minimal stocké en base. **`ADMIN_USERNAME` et `OPERATOR_USERNAME` doivent être différents** (un identifiant = un document utilisateur).
+- `OPERATOR_PASSWORD` : mot de passe du **compte caisse** (créé dans Firestore au démarrage si défini). Ce compte se connecte sur `/login` comme les autres mais **n’a pas accès** à la liste des tickets ni à l’export : uniquement l’accueil (formulaire + impression). Définir aussi `OPERATOR_USERNAME` (défaut `operator`) et, au besoin, `OPERATOR_GYM_NAME`, `OPERATOR_PHONE`, `OPERATOR_ADDRESS` pour le profil minimal stocké en base. **`ADMIN_USERNAME` et `OPERATOR_USERNAME` doivent être différents** (un identifiant = un document utilisateur).
 - Dès que **`ADMIN_PASSWORD` ou `OPERATOR_PASSWORD`** est défini, **toute l’application** exige une connexion. Laisser les deux vides uniquement en développement local si vous acceptez l’accès sans login.
 - `LIST_QR_FETCH_MAX` : plafond de lectures Firestore par chargement de liste. Les filtres **Actif** / **Expiré** utilisent des requêtes indexées (`expiration_ts`). Le filtre **Tous** reste limité aux tickets les plus récents jusqu’à ce plafond (voir commentaires dans `config.py`).
 - `LIST_QR_RESPONSE_CACHE_SECONDS` : cache des réponses GET `/api/list_qr` ; invalidé après création, suppression, impression, rattachement de QR sans propriétaire, et après le nettoyage des expirés.
@@ -291,12 +292,12 @@ Variables minimales à définir en production :
 - `QR_SIGNATURE_KEY` : clé HMAC pour signer les QR codes, longue et aléatoire
 - `FLASK_DEBUG=0` : ne pas exposer le mode debug
 
-Connexion web : page `/login` (sessions Flask). **Comptes gestion** (inscription salle, admin `.env`, superadmin) : accueil + dashboard + export. **Compte opérateur** : accueil + APIs création/impression uniquement.
+Connexion web : page `/login` (sessions Flask). **Comptes gestion** (inscription salle, admin `.env`, superadmin) : accueil, **Tickets** (`/tickets`, liste + export), **Dashboard** (`/dashboard`, propriétaire / superadmin), paramètres. **Compte opérateur** : accueil + APIs création/impression uniquement.
 
 ### Checklist sécurité production
 
 - Activer HTTPS derrière un reverse proxy (Nginx/Apache/Caddy)
-- Restreindre l'accès au dashboard admin (réseau interne/VPN si possible)
+- Restreindre l'accès aux pages gestion (`/tickets`, `/dashboard`, `/settings`) si possible (réseau interne/VPN)
 - Sauvegarder Firestore / votre projet GCP ; l’app ne repose plus sur `database.db` pour les données métier
 - Mettre à jour les dépendances Python périodiquement
 - Surveiller les logs applicatifs et les erreurs d'impression

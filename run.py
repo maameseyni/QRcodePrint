@@ -26,7 +26,8 @@ if __name__ == '__main__':
     print("\nDemarrage du serveur Flask...")
     print(f"Application accessible sur: http://localhost:{port}")
     print(f"Accueil: http://localhost:{port}/")
-    print(f"Dashboard: http://localhost:{port}/dashboard")
+    print(f"Tickets (liste): http://localhost:{port}/tickets")
+    print(f"Dashboard (propriétaire): http://localhost:{port}/dashboard")
     print("\nAppuyez sur Ctrl+C pour arreter le serveur\n")
     
     # Lancer l'application

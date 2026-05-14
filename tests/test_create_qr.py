@@ -114,6 +114,9 @@ def test_create_qr_success_minimal(
     assert body.get("success") is True
     assert body.get("qr_id") == "uuid-qr-1"
     mock_create.assert_called_once()
+    call_kw = mock_create.call_args[0][0]
+    assert call_kw.get("created_by_user_id") == "owner-1"
+    assert call_kw.get("created_by_display") == "Salle"
 
 
 @patch("app._current_user")

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Tickets — QR Code Print</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="page-tickets" data-tickets-refresh-ms="{{ tickets_refresh_ms }}" data-app-home="{{ url_for('index') }}" data-qr-per-page="{{ list_qr_per_page }}" data-tickets-can-export="{{ '1' if tickets_can_export else '0' }}">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white custom-navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-qr-code-scan"></i> QR Code Print
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Accueil</a>
+                    </li>
+                    {% if can_manage_settings %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('tickets') }}" aria-current="page">Tickets</a>
+                    </li>
+                    {% if can_manage_settings %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('settings') }}">Paramètres</a>
+                    </li>
+                    {% endif %}
+                    {% if current_role %}
+                    <li class="nav-item">
+                        <form method="post" action="{{ url_for('logout') }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link nav-link py-0">Déconnexion ({{ current_gym_name or current_full_name or current_user or 'admin' }})</button>
+                        </form>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="tickets-page-head d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+            <div>
+                <h1 class="tickets-page-title h3 mb-1"><i class="bi bi-ticket-perforated tickets-title-icon" aria-hidden="true"></i> Tickets</h1>
+                <p class="tickets-page-subtitle text-muted small mb-0">Liste des tickets QR et filtres{% if tickets_can_export %} ; export CSV / Excel{% endif %}</p>
+            </div>
+            <a href="{{ url_for('index') }}" class="btn btn-primary text-white text-decoration-none shadow-sm" id="ticketsCreateQrLink" title="Page avec le formulaire client et l’aperçu du QR (index.html)">
+                <i class="bi bi-plus-circle"></i> Créer un QR Code
+            </a>
+        </div>
+
+        <!-- Statistiques -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2">Total QR Codes</h6>
+                                <h3 class="mb-0" id="statTotal">-</h3>
+                            </div>
+                            <i class="bi bi-qr-code fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2">Actifs</h6>
+                                <h3 class="mb-0" id="statActive">-</h3>
+                            </div>
+                            <i class="bi bi-check-circle fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-danger">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-1">Inactifs</h6>
+                                <h3 class="mb-0" id="statExpired">-</h3>
+                            </div>
+                            <i class="bi bi-x-circle fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtres et export -->
+        <div class="card tickets-filters-card shadow-sm mb-4 border-0">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h2 class="h5 mb-0 tickets-filters-heading fw-bold"><i class="bi bi-sliders2 me-2" aria-hidden="true"></i>Filtres et recherche</h2>
+                    <div class="d-flex flex-nowrap gap-2 align-items-center tickets-filters-toolbar-btns">
+                        <button type="button" class="btn btn-primary" id="applyFiltersBtn" title="Appliquer les filtres" aria-label="Appliquer les filtres">
+                            <i class="bi bi-funnel" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="refreshBtn" title="Actualiser la liste" aria-label="Actualiser la liste">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="ticketsFilterChipsWrap" class="tickets-filter-chips-wrap mb-3 d-none">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="tickets-filter-chips-label small text-muted">Filtres actifs</span>
+                        <div class="d-flex flex-wrap gap-2" id="ticketsFilterChips"></div>
+                        <button type="button" class="btn btn-link btn-sm tickets-clear-filters py-0 px-1 d-none" id="ticketsClearFiltersBtn">Tout effacer</button>
+                    </div>
+                </div>
+                <div class="tickets-filters-fields">
+                    <div class="tickets-filters-field tickets-filters-field--statut">
+                        <label for="filterSelect_toggle" class="form-label">Statut</label>
+                        <input type="hidden" id="filterSelect" value="all">
+                        <div class="dropdown qrp-dropdown w-100">
+                            <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                    type="button" id="filterSelect_toggle" data-bs-toggle="dropdown"
+                                    data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                    aria-expanded="false">
+                                <span id="filterSelect_label" class="text-truncate">Tous</span>
+                            </button>
+                            <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="filterSelect_toggle">
+                                <li><button type="button" class="dropdown-item dash-dd-opt py-2" data-value="all" data-label="Tous">Tous</button></li>
+                                <li><button type="button" class="dropdown-item dash-dd-opt py-2" data-value="active" data-label="Actifs">Actifs</button></li>
+                                <li><button type="button" class="dropdown-item dash-dd-opt py-2" data-value="expired" data-label="Expirés">Expirés</button></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="tickets-filters-field tickets-filters-field--owner">
+                        <label for="authorSelect_toggle" class="form-label">Auteur</label>
+                        <input type="hidden" id="authorSelect" value="">
+                        <div class="dropdown qrp-dropdown w-100">
+                            <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                    type="button" id="authorSelect_toggle" data-bs-toggle="dropdown"
+                                    data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                    aria-expanded="false">
+                                <span id="authorSelect_label" class="text-truncate">Tous</span>
+                            </button>
+                            <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="authorSelect_toggle">
+                                <li><button type="button" class="dropdown-item dash-author-opt py-2" data-value="" data-label="Tous">Tous</button></li>
+                                {% for a in tickets_author_options %}
+                                <li><button type="button" class="dropdown-item dash-author-opt py-2" data-value="{{ a.id }}" data-label="{{ a.label }}">{{ a.label }}</button></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="tickets-filters-field tickets-filters-field--search">
+                        <label for="searchInput" class="form-label" title="Nom, prénom, téléphone, email">Recherche</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Nom, prénom, tél., email…" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="tickets-filters-field tickets-filters-field--ticket">
+                        <label for="ticketInput" class="form-label">N° ticket</label>
+                        <input type="text" class="form-control" id="ticketInput" placeholder="Ex. 000001" inputmode="numeric" autocomplete="off">
+                    </div>
+                    <div class="tickets-filters-field tickets-filters-field--date">
+                        <label for="dateFrom" class="form-label">Créé du</label>
+                        <input type="date" class="form-control" id="dateFrom">
+                    </div>
+                    <div class="tickets-filters-field tickets-filters-field--date">
+                        <label for="dateTo" class="form-label">Créé au</label>
+                        <input type="date" class="form-control" id="dateTo">
+                    </div>
+                </div>
+                {% if tickets_can_export %}
+                <hr class="my-3">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <span class="text-muted small me-2">Exporter la liste filtrée :</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportCsvBtn">
+                        <i class="bi bi-filetype-csv"></i> CSV
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportXlsxBtn">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Excel
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Tableau des QR Codes -->
+        <div class="card shadow-lg card-qr-table">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0 text-white"><i class="bi bi-list-ul me-2"></i>Liste des tickets</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive table-responsive-qr-tickets">
+                    <table class="table table-hover table-qr-tickets">
+                        <thead>
+                            <tr>
+                                <th class="text-center align-middle" scope="col" style="width: 3.25rem;">N°</th>
+                                <th class="text-start align-middle col-qr-client" scope="col">Client</th>
+                                <th class="text-start align-middle col-qr-phone" scope="col">Téléphone</th>
+                                <th class="text-start align-middle col-qr-ticketnum" scope="col">Ticket</th>
+                                <th class="text-start align-middle" scope="col">Paiement</th>
+                                <th class="text-start align-middle" scope="col">Détail</th>
+                                <th class="text-start align-middle" scope="col">Créé le</th>
+                                <th class="text-start align-middle col-qr-created-by" scope="col">Auteur</th>
+                                <th class="text-start align-middle" scope="col">Expire le</th>
+                                <th class="text-center align-middle col-qr-statut" scope="col">Statut</th>
+                                <th class="text-center align-middle col-qr-actions" scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="qrTableBody">
+                            <tr>
+                                <td colspan="11" class="text-center">
+                                    <div class="spinner-border spinner-tickets" role="status">
+                                        <span class="visually-hidden">Chargement...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <nav id="qrPaginationNav" class="qr-pagination-nav d-none mt-3 pt-3" aria-label="Pagination liste QR">
+                    <div class="qr-pagination-inner">
+                        <div class="qr-pagination-summary" id="qrPaginationInfo" role="status"></div>
+                        <div class="qr-pagination-toolbar">
+                            <button type="button" class="qr-pagination-arrow" id="qrPagePrev" aria-label="Page précédente" title="Page précédente">
+                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                            </button>
+                            <ul class="qr-pagination-pages list-unstyled mb-0" id="qrPaginationUl"></ul>
+                            <span class="qr-pagination-compact d-none" id="qrPaginationCompact" aria-hidden="true"></span>
+                            <button type="button" class="qr-pagination-arrow" id="qrPageNext" aria-label="Page suivante" title="Page suivante">
+                                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal : ticket complet (même design que l’accueil) -->
+    <div class="modal fade ticket-preview-modal" id="ticketsTicketModal" tabindex="-1" aria-labelledby="ticketsTicketModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+            <div class="modal-content ticket-preview-modal-shell">
+                <div class="modal-header ticket-preview-modal-header border-0">
+                    <div class="ticket-preview-modal-heading">
+                        <span class="ticket-preview-modal-badge" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                        <div>
+                            <h5 class="modal-title text-white" id="ticketsTicketModalLabel">Aperçu du ticket</h5>
+                            <p class="ticket-preview-modal-subtitle mb-0">80&nbsp;mm · Texte, QR code et pied de page comme à l’impression</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body ticket-preview-modal-body border-0">
+                    <div class="ticket-preview-modal-viewport">
+                        <div class="ticket-modal-scroll-band">
+                            <div class="ticket-modal-scale-outer">
+                                <div class="ticket-scale-clip">
+                                    <div class="ticket-scale-stage">
+                                        <div id="ticketsTicketPreview" class="ticket-receipt-sheet mx-auto ticket-on-qr-box" role="region" aria-label="Aperçu du ticket thermique"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer ticket-preview-modal-footer border-0 flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center justify-content-center">
+                    <button type="button" class="btn btn-light border ticket-preview-action ticket-preview-action-secondary" id="ticketsTicketDownloadBtn" title="Enregistrer en PNG" aria-label="Télécharger le ticket en PNG">
+                        <i class="bi bi-download" aria-hidden="true"></i>
+                        <span>Télécharger PNG</span>
+                    </button>
+                    <button type="button" class="btn btn-success ticket-preview-action ticket-preview-action-primary" id="ticketsTicketPrintBtn" title="Lancer l’impression" aria-label="Imprimer">
+                        <i class="bi bi-printer" aria-hidden="true"></i>
+                        <span>Imprimer</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal : prolonger un ticket expiré (même document, nouveau QR / date) -->
+    <div class="modal fade" id="extendQrModal" tabindex="-1" aria-labelledby="extendQrModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="extendQrModalLabel">Prolonger le ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="extendQrIdField" value="">
+                    <p class="small text-muted mb-3">Le même numéro de ticket est conservé. Une nouvelle expiration est calculée <strong>à partir de maintenant</strong> ; le QR sur le ticket change — pensez à <strong>réimprimer</strong>.</p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label for="extendQrAmountTotal" class="form-label">Montant dû <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="extendQrAmountTotal" min="0" step="0.01" required autocomplete="off" placeholder="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="extendQrAmountPaid" class="form-label">Montant payé <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="extendQrAmountPaid" min="0" step="0.01" required autocomplete="off" placeholder="0">
+                        </div>
+                    </div>
+                    <label class="form-label" for="extendQrExpiration_toggle">Durée</label>
+                    <input type="hidden" id="extendQrExpiration" value="24h" autocomplete="off">
+                    <div class="dropdown qrp-dropdown w-100">
+                        <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                type="button" id="extendQrExpiration_toggle" data-bs-toggle="dropdown"
+                                data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                aria-expanded="false">
+                            <span id="extendQrExpiration_label">24 heures</span>
+                        </button>
+                        <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="extendQrExpiration_toggle">
+                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="extendQrExpiration" data-value="24h" data-label="24 heures">24 heures</button></li>
+                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="extendQrExpiration" data-value="7j" data-label="7 jours">7 jours</button></li>
+                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="extendQrExpiration" data-value="30j" data-label="30 jours">30 jours</button></li>
+                            <li><button type="button" class="dropdown-item qrp-dd-opt py-2" data-target="extendQrExpiration" data-value="custom" data-label="Personnalisé">Personnalisé</button></li>
+                        </ul>
+                    </div>
+                    <div id="extendQrCustomWrap" class="mt-3 d-none">
+                        <label for="extendQrCustomHours" class="form-label small text-muted mb-1">Heures</label>
+                        <input type="number" class="form-control" id="extendQrCustomHours" min="1" max="8760" step="1" placeholder="Ex. 48">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" id="extendQrSubmitBtn">Prolonger</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour confirmation de suppression -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmer la suppression</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Êtes-vous sûr de vouloir supprimer ce QR Code ? Cette action est irréversible.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Supprimer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast pour notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/ticket-scale.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/tickets.js') }}"></script>
+</body>
+</html>
+

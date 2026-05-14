@@ -49,6 +49,9 @@ class QueryFilters:
     date_from: str = ""
     date_to: str = ""
     limit: int = 500
+    # Filtre auteur : id compte (propriétaire ou caissier) + id propriétaire de la salle (QR sans créateur = propriétaire).
+    author_account_id: str = ""
+    author_scope_owner_id: str = ""
 
 
 class FirestoreDataStore:
@@ -171,6 +174,32 @@ class FirestoreDataStore:
             payload["username"] = str(payload["username"] or "").strip().lower()
         self._col("users").document(user_id).update(payload)
 
+    def list_cashiers_for_owner(self, owner_id: str) -> List[Dict[str, Any]]:
+        """Comptes caissiers rattachés à un propriétaire (owner_id)."""
+        oid = str(owner_id or "").strip()
+        if not oid:
+            return []
+        docs = (
+            self._col("users")
+            .where(filter=FieldFilter("owner_id", "==", oid))
+            .where(filter=FieldFilter("role", "==", "cashier"))
+            .stream()
+        )
+        rows: List[Dict[str, Any]] = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            data.setdefault("id", doc.id)
+            rows.append(data)
+        rows.sort(key=lambda r: str(r.get("username") or "").lower())
+        return rows
+
+    def delete_user_document(self, user_id: str) -> None:
+        """Supprime un document utilisateur (caissier, etc.)."""
+        uid = str(user_id or "").strip()
+        if not uid:
+            raise ValueError("delete_user_document: user_id obligatoire")
+        self._col("users").document(uid).delete()
+
     def allocate_ticket_number(self, owner_id: str) -> str:
         """Numéro unique 6 chiffres (000001–999999), puis boucle, par propriétaire structure."""
         oid = str(owner_id or "").strip()
@@ -217,13 +246,22 @@ class FirestoreDataStore:
         # Firestore est schema-less. Méthode conservée pour compatibilité.
         return True
 
-    def qr_hash_exists(self, qr_hash: str, owner_id: Optional[str] = None) -> bool:
+    def qr_hash_exists(
+        self,
+        qr_hash: str,
+        owner_id: Optional[str] = None,
+        exclude_qr_id: Optional[str] = None,
+    ) -> bool:
         q = self._col("qr_codes").where(filter=FieldFilter("qr_hash", "==", qr_hash))
         if owner_id:
             q = q.where(filter=FieldFilter("owner_id", "==", owner_id))
-        q = q.limit(1)
-        docs = q.stream()
-        return any(True for _ in docs)
+        q = q.limit(5)
+        ex = str(exclude_qr_id or "").strip()
+        for doc in q.stream():
+            if ex and doc.id == ex:
+                continue
+            return True
+        return False
 
     def create_qr(self, qr_record: Dict[str, Any]):
         record = dict(qr_record)
@@ -271,6 +309,17 @@ class FirestoreDataStore:
             if not existing:
                 raise ValueError("QR introuvable pour ce compte")
         self._col("qr_codes").document(qr_id).update({"printed_at": printed_at_iso})
+
+    def update_qr_fields(self, qr_id: str, updates: Dict[str, Any], owner_id: Optional[str] = None) -> bool:
+        """Mise à jour partielle d'un document QR (ex. prolongation : qr_data, expiration, is_active)."""
+        qid = str(qr_id or "").strip()
+        if not qid or not updates:
+            return False
+        if owner_id:
+            if not self.get_qr(qid, owner_id=owner_id):
+                return False
+        self._col("qr_codes").document(qid).update(dict(updates))
+        return True
 
     def delete_qr(self, qr_id: str, owner_id: Optional[str] = None) -> bool:
         ref = self._col("qr_codes").document(qr_id)
@@ -429,6 +478,17 @@ class FirestoreDataStore:
                 continue
             if date_to and created_date and created_date > date_to:
                 continue
+
+            auth = (filters.author_account_id or "").strip()
+            owner_scope = (filters.author_scope_owner_id or "").strip()
+            if auth:
+                raw_creator = str(row.get("created_by_user_id") or "").strip()
+                if owner_scope and auth == owner_scope:
+                    if raw_creator and raw_creator != owner_scope:
+                        continue
+                else:
+                    if raw_creator != auth:
+                        continue
 
             out.append(row)
         return out

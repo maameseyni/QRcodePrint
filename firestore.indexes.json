@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "qrprint_users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "qrprint_qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "qr_hash", "order": "ASCENDING" },
+        { "fieldPath": "owner_id", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "qrprint_qr_codes",
       "queryScope": "COLLECTION",
       "fields": [

@@ -9,6 +9,7 @@ import uuid
 import hashlib
 import hmac
 import json
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -202,7 +203,7 @@ def ensure_superadmin_user():
 
 
 def ensure_operator_user():
-    """Compte caisse (Firestore) : création QR / impression, sans dashboard liste/export."""
+    """Compte caisse (Firestore) : création QR / impression, sans liste tickets / export."""
     username = (app.config.get('OPERATOR_USERNAME') or 'operator').strip().lower()
     password = app.config.get('OPERATOR_PASSWORD')
     if not username or not password:
@@ -256,8 +257,23 @@ def try_login(username, password):
     return None
 
 
-def _current_owner_id():
+def _session_account_id():
+    """ID Firestore du compte connecté (propriétaire ou caissier)."""
     return str(session.get('user_id') or '')
+
+
+def _current_owner_id():
+    """Propriétaire structure pour QR / tickets (caissier → owner_id en session)."""
+    return str(session.get('owner_id') or session.get('user_id') or '')
+
+
+def _user_can_export_tickets(user) -> bool:
+    """Export CSV/Excel depuis la liste des tickets : autorisé pour tous sauf caissiers avec allow_export désactivé."""
+    if not user:
+        return False
+    if str(user.get('role') or '').strip().lower() != 'cashier':
+        return True
+    return bool(user.get('allow_export', True))
 
 
 def _user_dict_from_session(uid: str):
@@ -278,7 +294,9 @@ def _user_dict_from_session(uid: str):
         'secondary_phone': str(session.get('secondary_phone') or ''),
         'email': str(session.get('email') or ''),
         'address': str(session.get('address') or ''),
+        'owner_id': str(session.get('owner_id') or suid),
         'is_active': True,
+        'allow_export': bool(session.get('allow_export', True)),
     }
 
 
@@ -286,7 +304,7 @@ def _current_user():
     """Un seul aller-retour Firestore par requête HTTP (décorateurs + context_processor)."""
     if '_qrprint_user' in g:
         return g._qrprint_user
-    uid = _current_owner_id()
+    uid = _session_account_id()
     if not uid:
         g._qrprint_user = None
         return None
@@ -321,6 +339,12 @@ def _current_user():
     if not bool(user.get('is_active', True)):
         g._qrprint_user = None
         return None
+    db_sv = int(user.get('session_version') or 0)
+    sess_sv = int(session.get('session_version', 0))
+    if sess_sv != db_sv:
+        session.clear()
+        g._qrprint_user = None
+        return None
     if 'phone' not in session or 'address' not in session:
         session['phone'] = str(user.get('phone') or '')
         session['address'] = str(user.get('address') or '')
@@ -328,6 +352,13 @@ def _current_user():
         session['secondary_phone'] = str(user.get('secondary_phone') or '')
     if 'email' not in session:
         session['email'] = str(user.get('email') or '')
+    oid = str(user.get('owner_id') or user.get('id') or '').strip()
+    if str(session.get('owner_id') or '') != oid:
+        session['owner_id'] = oid
+    if str(user.get('role') or '').strip().lower() == 'cashier':
+        session['allow_export'] = bool(user.get('allow_export', True))
+    else:
+        session.pop('allow_export', None)
     g._qrprint_user = user
     return user
 
@@ -344,6 +375,8 @@ def _profile_complete(user: dict) -> bool:
     if role == 'superadmin':
         return True
     if role == 'operator':
+        return True
+    if role == 'cashier':
         return True
     required = [
         str(user.get('gym_name') or '').strip(),
@@ -362,8 +395,8 @@ def redirect_to_login():
     return redirect(url_for('login', next=nxt or ''))
 
 
-def require_dashboard_session(func):
-    """Liste / export dashboard : compte gestion (user, superadmin), pas le compte caisse « operator »."""
+def require_tickets_list_session(func):
+    """Liste / export des tickets : compte gestion (user, superadmin), pas le compte caisse « operator »."""
     @wraps(func)
     def wrapper(*args, **kwargs):
         if not site_auth_required():
@@ -374,9 +407,10 @@ def require_dashboard_session(func):
                 if request.path.startswith('/api/'):
                     return jsonify({
                         'success': False,
-                        'error': 'Accès réservé aux comptes gestion (export et tableau). Le compte caisse crée des QR depuis l’accueil.',
+                        'error': 'Accès réservé aux comptes gestion (liste des tickets et export). Le compte caisse crée des QR depuis l’accueil.',
                     }), 403
                 return redirect(url_for('index'))
+            # Caissier : même liste que le propriétaire (données via owner_id) ; export CSV/Excel selon allow_export.
             if not _profile_complete(u):
                 if request.endpoint == 'complete_profile':
                     return func(*args, **kwargs)
@@ -392,8 +426,8 @@ def require_dashboard_session(func):
     return wrapper
 
 
-# Alias historique (nom trompeur : ne vérifie pas un rôle « admin » système).
-require_admin_session = require_dashboard_session
+# Alias historique : même garde que la liste des tickets (pas un rôle « admin » système).
+require_admin_session = require_tickets_list_session
 
 
 def require_operator_or_admin_session(func):
@@ -419,6 +453,30 @@ def require_operator_or_admin_session(func):
     return wrapper
 
 
+def require_gym_owner_session(func):
+    """Paramètres / gestion caissiers : propriétaire ou admin global, pas operator ni caissier."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not site_auth_required():
+            return func(*args, **kwargs)
+        if not _is_authenticated():
+            return redirect_to_login()
+        u = _current_user()
+        if not u:
+            return redirect_to_login()
+        role = str(u.get('role') or '').strip().lower()
+        if role in ('operator', 'cashier'):
+            if role == 'cashier':
+                return redirect(url_for('tickets'))
+            return redirect(url_for('index'))
+        if not _profile_complete(u):
+            if request.endpoint == 'complete_profile':
+                return func(*args, **kwargs)
+            return redirect(url_for('complete_profile'))
+        return func(*args, **kwargs)
+    return wrapper
+
+
 @app.context_processor
 def inject_session():
     sa = site_auth_required()
@@ -431,9 +489,11 @@ def inject_session():
         'site_auth_required': sa,
         'operator_login_required': sa,
         'admin_login_required': admin_login_required(),
-        'dashboard_refresh_ms': app.config.get('DASHBOARD_REFRESH_MS', 120000),
+        'tickets_refresh_ms': app.config.get('DASHBOARD_REFRESH_MS', 120000),
         'list_qr_per_page': app.config.get('LIST_QR_PER_PAGE', 15),
         'profile_incomplete': bool(u and not _profile_complete(u)),
+        'can_manage_settings': str(session.get('role') or '').strip().lower() not in ('operator', 'cashier'),
+        'tickets_can_export': _user_can_export_tickets(u) if u else True,
     }
 
 def _warn_operator_admin_username_collision():
@@ -590,7 +650,7 @@ def _maybe_attach_owner_to_unowned_qr(owner_id: str) -> int:
 
 
 def _invalidate_list_qr_cache_for_owner(owner_id):
-    """Après création / suppression / impression : évite une liste dashboard obsolète si cache activé."""
+    """Après création / suppression / impression : évite une liste tickets obsolète si cache activé."""
     oid = str(owner_id or '').strip()
     if not oid:
         return
@@ -1154,7 +1214,53 @@ def print_receipt_escpos(printer, qr_record, expiration_date, owner_user=None):
     emit('\n\n')
 
 
-def _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, limit, owner_id):
+def _normalize_tickets_author_id(requested: str, owner_id: str) -> str:
+    """Paramètre `author` des listes / exports : uniquement le propriétaire de la salle ou un de ses caissiers."""
+    req = (requested or '').strip()
+    oid = str(owner_id or '').strip()
+    if not req or not oid:
+        return ''
+    if req == oid:
+        return oid
+    try:
+        target = store.get_user_by_id(req)
+    except Exception:
+        return ''
+    if not target:
+        return ''
+    if str(target.get('role') or '').strip().lower() != 'cashier':
+        return ''
+    if str(target.get('owner_id') or '').strip() != oid:
+        return ''
+    return req
+
+
+def _tickets_author_filter_choices(owner_id: str) -> list:
+    """Options du filtre Auteur (propriétaire + caissiers de la salle)."""
+    oid = str(owner_id or '').strip()
+    if not oid:
+        return []
+    out = [{'id': oid, 'label': 'Owner'}]
+    try:
+        cashiers = store.list_cashiers_for_owner(oid) or []
+    except Exception:
+        cashiers = []
+    cashiers = sorted(
+        cashiers,
+        key=lambda x: (str(x.get('full_name') or x.get('username') or '')).lower(),
+    )
+    for c in cashiers:
+        cid = str(c.get('id') or '').strip()
+        if not cid:
+            continue
+        lab = ' '.join(str(c.get('full_name') or '').split()).strip() or str(c.get('username') or '')
+        out.append({'id': cid, 'label': lab})
+    return out
+
+
+def _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, limit, owner_id, author_id=""):
+    oid = str(owner_id or "").strip()
+    norm_author = _normalize_tickets_author_id(author_id, oid) if oid else ""
     filters = QueryFilters(
         filter_type=filter_type,
         search=search,
@@ -1162,8 +1268,49 @@ def _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, limit, 
         date_from=date_from,
         date_to=date_to,
         limit=limit,
+        author_account_id=norm_author,
+        author_scope_owner_id=oid if norm_author else "",
     )
     return store.list_qr(filters, owner_id=owner_id)
+
+
+_AUTHOR_SNAPSHOT_MAX_LEN = 120
+
+
+def _created_by_snapshot_label(acting_user) -> str:
+    """Libellé persisté sur le QR à la création : nom affiché du compte (full_name), sinon repli."""
+    if not acting_user:
+        return 'Owner'
+    role_l = str(acting_user.get('role') or '').strip().lower()
+    fn = ' '.join(str(acting_user.get('full_name') or '').split()).strip()
+    if fn:
+        return fn[:_AUTHOR_SNAPSHOT_MAX_LEN]
+    if role_l == 'cashier':
+        un = str(acting_user.get('username') or '').strip()
+        parts = un.rsplit('-', 1)
+        if len(parts) == 2 and parts[1].strip():
+            return parts[1].strip().upper()
+        return (un[:16] or '?').upper()
+    gn = ' '.join(str(acting_user.get('gym_name') or '').split()).strip()
+    if gn:
+        return gn[:_AUTHOR_SNAPSHOT_MAX_LEN]
+    return 'Owner'
+
+
+def _created_by_cell_for_qr_row(row: dict, viewer_user: dict, owner_id: str) -> str:
+    """Texte colonne « Auteur » : vous / nom persisté à la création / Owner (QR anciens)."""
+    vid = str((viewer_user or {}).get('id') or '').strip()
+    oid = str(owner_id or '').strip()
+    raw_creator = str(row.get('created_by_user_id') or '').strip()
+    snap = str(row.get('created_by_display') or '').strip()
+    cid = raw_creator or oid
+    if vid and cid == vid:
+        return 'vous'
+    if snap:
+        return snap
+    if cid == oid:
+        return 'Owner'
+    return '—'
 
 
 def _qr_list_stats_from_rows(rows, now=None):
@@ -1187,9 +1334,11 @@ def _qr_list_stats_from_rows(rows, now=None):
     return active_count, expired_count
 
 
-def _rows_to_qr_json_list(rows, now=None):
+def _rows_to_qr_json_list(rows, now=None, viewer_user=None, owner_id=None):
     if now is None:
         now = datetime.now()
+    viewer_user = viewer_user or {}
+    oid = str(owner_id or '').strip()
     qr_list = []
     for row in rows:
         expiration_raw = str(row.get('expiration_date') or '')
@@ -1213,6 +1362,7 @@ def _rows_to_qr_json_list(rows, now=None):
             'payment_mode': row.get('payment_mode'),
             'service': row.get('service'),
             'created_at': row.get('created_at'),
+            'created_by': _created_by_cell_for_qr_row(row, viewer_user, oid),
             'expiration_date': row.get('expiration_date'),
             'printed_at': row.get('printed_at'),
             'is_active': bool(row.get('is_active', True)),
@@ -1226,7 +1376,10 @@ def _login_session_from_user(user):
     """Écrit la session Flask comme après une connexion classique."""
     session.clear()
     session['role'] = str(user.get('role') or 'admin')
-    session['user_id'] = str(user.get('id') or '')
+    uid = str(user.get('id') or '').strip()
+    owner_scope = str(user.get('owner_id') or '').strip()
+    session['user_id'] = uid
+    session['owner_id'] = owner_scope if owner_scope else uid
     session['username'] = str(user.get('username') or '')
     session['full_name'] = str(user.get('full_name') or '')
     session['gym_name'] = str(user.get('gym_name') or '')
@@ -1234,6 +1387,11 @@ def _login_session_from_user(user):
     session['secondary_phone'] = str(user.get('secondary_phone') or '')
     session['email'] = str(user.get('email') or '')
     session['address'] = str(user.get('address') or '')
+    session['session_version'] = int(user.get('session_version') or 0)
+    if str(user.get('role') or '').strip().lower() == 'cashier':
+        session['allow_export'] = bool(user.get('allow_export', True))
+    else:
+        session.pop('allow_export', None)
     session.permanent = True
 
 
@@ -1370,17 +1528,8 @@ def login():
             password = request.form.get('password') or ''
             user = try_login(username, password)
             if user:
-                session.clear()
-                session['role'] = str(user.get('role') or 'admin')
-                session['user_id'] = str(user.get('id') or '')
+                _login_session_from_user(user)
                 session['username'] = str(user.get('username') or username)
-                session['full_name'] = str(user.get('full_name') or '')
-                session['gym_name'] = str(user.get('gym_name') or '')
-                session['phone'] = str(user.get('phone') or '')
-                session['secondary_phone'] = str(user.get('secondary_phone') or '')
-                session['email'] = str(user.get('email') or '')
-                session['address'] = str(user.get('address') or '')
-                session.permanent = True
                 nxt = _safe_next_url(request.form.get('next'))
                 return redirect(nxt or url_for('index'))
             error = 'Identifiants invalides.'
@@ -1477,6 +1626,7 @@ def complete_profile():
             session['phone'] = phone
             session['secondary_phone'] = secondary_phone
             session['address'] = address
+            session['owner_id'] = str(user.get('id') or '')
             return redirect(url_for('index'))
 
     return render_template(
@@ -1486,101 +1636,329 @@ def complete_profile():
     )
 
 
+def _can_manage_cashiers(user):
+    """Propriétaire salle (user) ou admin / superadmin — pas caissier ni opérateur."""
+    if not user:
+        return False
+    return str(user.get('role') or '').strip().lower() in ('user', 'admin', 'superadmin')
+
+
+def _owned_cashier_for_owner(owner_user, cashier_id: str):
+    """Document caissier si `cashier_id` appartient à la salle de `owner_user`, sinon None."""
+    if not owner_user or not _can_manage_cashiers(owner_user):
+        return None
+    cid = str(cashier_id or '').strip()
+    if not cid:
+        return None
+    target = store.get_user_by_id(cid)
+    if not target:
+        return None
+    if str(target.get('role') or '').strip().lower() != 'cashier':
+        return None
+    if str(target.get('owner_id') or '').strip() != str(owner_user.get('id') or '').strip():
+        return None
+    return target
+
+
+def _max_cashier_numeric_suffix(owner_username: str, cashiers: list) -> int:
+    """Plus grand N pour des identifiants « owner-cN » (N entier) parmi les caissiers listés."""
+    base = (owner_username or '').strip().lower()
+    if not base:
+        return 0
+    pat = re.compile(r'^' + re.escape(base) + r'-c(\d+)$')
+    highest = 0
+    for row in cashiers or []:
+        u = str((row or {}).get('username') or '').strip().lower()
+        m = pat.match(u)
+        if m:
+            highest = max(highest, int(m.group(1)))
+    return highest
+
+
+def _allocate_cashier_username(store, owner_username: str, cashiers: list):
+    """Premier identifiant libre du type owner-c01, owner-c02, … (vérifie aussi l’unicité en base)."""
+    owner_un = (owner_username or '').strip().lower()
+    if not owner_un:
+        return None
+    n = _max_cashier_numeric_suffix(owner_un, cashiers) + 1
+    for _ in range(500):
+        candidate = f'{owner_un}-c{n:02d}'
+        if not store.get_user_by_username(candidate):
+            return candidate
+        n += 1
+    return None
+
+
+def _create_owned_cashier_account(store, owner_user, owner_un: str, c_pw: str, cashier_display_name: str):
+    """
+    Crée un caissier rattaché au propriétaire avec identifiant owner-cNN.
+    `cashier_display_name` : nom affiché (colonne Auteur de la liste tickets, full_name en base).
+    Retourne (username, None) en cas de succès, (None, message) en cas d’échec.
+    Recharge la liste des caissiers à chaque tentative et gère les courses / erreurs Firestore.
+    """
+    owner_id = str(owner_user.get('id') or '').strip()
+    ou = str(owner_un or '').strip().lower()
+    if not owner_id or not ou:
+        return None, 'Impossible de créer le caissier (données propriétaire manquantes).'
+    c_disp = ' '.join(str(cashier_display_name or '').split()).strip()
+    if not c_disp:
+        return None, 'Indiquez un nom pour le caissier.'
+    if len(c_disp) > _AUTHOR_SNAPSHOT_MAX_LEN:
+        return None, f'Le nom du caissier ne peut pas dépasser {_AUTHOR_SNAPSHOT_MAX_LEN} caractères.'
+
+    for attempt in range(15):
+        uid = None
+        try:
+            cashiers_fresh = store.list_cashiers_for_owner(owner_id)
+            c_username = _allocate_cashier_username(store, ou, cashiers_fresh)
+            if not c_username:
+                return None, 'Impossible d’attribuer un identifiant caissier (réessayez ou contactez le support).'
+            if store.get_user_by_username(c_username):
+                time.sleep(0.04)
+                continue
+            uid = str(uuid.uuid4())
+            store.create_user({
+                'id': uid,
+                'username': c_username,
+                'password_hash': generate_password_hash(c_pw),
+                'role': 'cashier',
+                'owner_id': owner_id,
+                'full_name': c_disp,
+                'gym_name': str(owner_user.get('gym_name') or ''),
+                'phone': str(owner_user.get('phone') or ''),
+                'secondary_phone': str(owner_user.get('secondary_phone') or ''),
+                'email': '',
+                'address': str(owner_user.get('address') or ''),
+                'is_active': True,
+                'allow_export': False,
+                'session_version': 0,
+                'created_at': datetime.utcnow().isoformat(),
+                'source': 'owner-created-cashier',
+            })
+            snap = store.get_user_by_id(uid)
+            if not snap or str(snap.get('username') or '').strip().lower() != c_username.lower():
+                try:
+                    store.delete_user_document(uid)
+                except Exception:
+                    pass
+                time.sleep(0.04)
+                continue
+            by_name = store.get_user_by_username(c_username)
+            if by_name and str(by_name.get('id')) != uid:
+                try:
+                    store.delete_user_document(uid)
+                except Exception:
+                    pass
+                time.sleep(0.04)
+                continue
+            return c_username, None
+        except GoogleAPICallError as e:
+            if uid:
+                try:
+                    store.delete_user_document(uid)
+                except Exception:
+                    pass
+            app.logger.warning('create_cashier tentative %s: Firestore %s', attempt + 1, e)
+            if attempt >= 14:
+                return None, 'Erreur temporaire Firestore. Réessayez dans un instant.'
+            time.sleep(0.06 * (attempt + 1))
+
+    return None, 'La création du caissier a échoué après plusieurs tentatives. Réessayez.'
+
+
 @app.route('/settings', methods=['GET', 'POST'])
-@require_operator_or_admin_session
+@require_gym_owner_session
 def settings():
-    """Paramètres compte + structure (identifiant, email, tickets)."""
+    """Paramètres compte + structure ; gestion des caissiers pour le propriétaire."""
     user = _current_user()
     if not user:
         return redirect_to_login()
     if not _profile_complete(user):
         return redirect(url_for('complete_profile'))
 
+    cashiers = store.list_cashiers_for_owner(str(user.get('id') or '')) if _can_manage_cashiers(user) else []
+    owner_un = str(user.get('username') or '').strip().lower()
+    next_cashier_username = (
+        _allocate_cashier_username(store, owner_un, cashiers) or '' if _can_manage_cashiers(user) else ''
+    )
     error = None
     if request.method == 'POST':
-        username = (request.form.get('username') or '').strip().lower()[:64]
-        email = (request.form.get('email') or '').strip().lower()
-        gym_name = (request.form.get('gym_name') or '').strip()
-        address = (request.form.get('address') or '').strip()
+        action = (request.form.get('action') or '').strip().lower()
 
-        if not username:
-            error = 'L’identifiant de connexion est obligatoire.'
-        elif email and ('@' not in email or len(email) < 5):
-            error = 'Adresse email invalide.'
-        elif not all([gym_name, address]):
-            error = 'Le nom de la structure et l’adresse sont obligatoires.'
-        else:
-            existing_u = store.get_user_by_username(username)
-            if existing_u and str(existing_u.get('id')) != str(user.get('id')):
-                error = 'Cet identifiant est déjà utilisé.'
-        if not error and email:
-            other = store.get_user_by_email(email)
-            if other and str(other.get('id')) != str(user.get('id')):
-                error = 'Cette adresse email est déjà utilisée.'
-        if not error:
-            try:
-                phone = normalize_sn_mobile_phone(request.form.get('phone', ''))
-            except ValueError:
-                error = _SN_PHONE_ERR_MSG
-            secondary_phone = ''
-            if not error:
-                raw_sec = (request.form.get('secondary_phone') or '').strip()
-                if raw_sec:
-                    try:
-                        secondary_phone = normalize_sn_mobile_phone(raw_sec)
-                    except ValueError:
-                        error = _SN_PHONE_ERR_MSG
-                if not error and secondary_phone == phone:
-                    error = 'Le 2e numéro doit être différent du numéro principal.'
-            if not error:
-                by_phone = store.get_user_by_phone(phone)
-                if by_phone and str(by_phone.get('id')) != str(user.get('id')):
-                    error = 'Ce numéro de téléphone est déjà utilisé par un autre compte.'
-            if not error:
-                updates = {
-                    'username': username,
-                    'email': email,
-                    'gym_name': gym_name,
-                    'full_name': gym_name,
-                    'phone': phone,
-                    'secondary_phone': secondary_phone,
-                    'address': address,
-                }
-                new_pw = (request.form.get('new_password') or '').strip()
-                new_pw2 = (request.form.get('new_password_confirm') or '').strip()
-                cur_pw = request.form.get('current_password') or ''
-                if new_pw or new_pw2 or cur_pw:
-                    if not new_pw:
-                        error = 'Saisissez le nouveau mot de passe.'
-                    elif len(new_pw) < 8:
-                        error = 'Le nouveau mot de passe doit contenir au moins 8 caractères.'
-                    elif new_pw != new_pw2:
-                        error = 'La confirmation ne correspond pas au nouveau mot de passe.'
-                    elif not cur_pw:
-                        error = 'Saisissez votre mot de passe actuel pour le modifier.'
+        if action == 'create_cashier':
+            if not _can_manage_cashiers(user):
+                error = 'Action non autorisée.'
+            else:
+                c_pw = request.form.get('cashier_password') or ''
+                c_pw2 = request.form.get('cashier_password_confirm') or ''
+                c_display = ' '.join((request.form.get('cashier_name') or '').split()).strip()
+                if not c_display:
+                    error = 'Indiquez un nom pour le caissier.'
+                elif len(c_display) > _AUTHOR_SNAPSHOT_MAX_LEN:
+                    error = f'Le nom du caissier ne peut pas dépasser {_AUTHOR_SNAPSHOT_MAX_LEN} caractères.'
+                elif len(c_pw) < 8:
+                    error = 'Le mot de passe du caissier doit contenir au moins 8 caractères.'
+                elif c_pw != c_pw2:
+                    error = 'La confirmation du mot de passe ne correspond pas.'
+                else:
+                    c_username, create_err = _create_owned_cashier_account(
+                        store, user, owner_un, c_pw, c_display
+                    )
+                    if create_err:
+                        error = create_err
                     else:
-                        pwd_hash = str(user.get('password_hash') or '')
-                        if not pwd_hash or not check_password_hash(pwd_hash, cur_pw):
-                            error = 'Mot de passe actuel incorrect.'
-                        else:
-                            updates['password_hash'] = generate_password_hash(new_pw)
+                        return redirect(
+                            url_for(
+                                'settings',
+                                cashier_created='1',
+                                cashier_username=c_username,
+                                cashier_display_name=c_display,
+                            )
+                        )
+
+        elif action == 'delete_cashier':
+            cid = (request.form.get('cashier_id') or '').strip()
+            if not _can_manage_cashiers(user):
+                error = 'Action non autorisée.'
+            else:
+                target = _owned_cashier_for_owner(user, cid)
+                if not target:
+                    error = 'Caissier introuvable.'
+                else:
+                    store.delete_user_document(cid)
+                    return redirect(url_for('settings', cashier_deleted='1'))
+
+        elif action == 'reset_cashier_password':
+            cid = (request.form.get('cashier_id') or '').strip()
+            new_pw = request.form.get('reset_password') or ''
+            new_pw2 = request.form.get('reset_password_confirm') or ''
+            target = _owned_cashier_for_owner(user, cid)
+            if not target:
+                error = 'Caissier introuvable ou action non autorisée.'
+            elif len(new_pw) < 8:
+                error = 'Le mot de passe doit contenir au moins 8 caractères.'
+            elif new_pw != new_pw2:
+                error = 'La confirmation ne correspond pas au mot de passe.'
+            else:
+                new_sv = int(target.get('session_version') or 0) + 1
+                store.update_user(
+                    cid,
+                    {
+                        'password_hash': generate_password_hash(new_pw),
+                        'session_version': new_sv,
+                    },
+                )
+                un = str(target.get('username') or '')
+                return redirect(url_for('settings', cashier_password_reset='1', cashier_username=un))
+
+        elif action == 'toggle_cashier_active':
+            cid = (request.form.get('cashier_id') or '').strip()
+            target = _owned_cashier_for_owner(user, cid)
+            if not target:
+                error = 'Caissier introuvable ou action non autorisée.'
+            else:
+                new_active = not bool(target.get('is_active', True))
+                store.update_user(cid, {'is_active': new_active})
+                return redirect(
+                    url_for(
+                        'settings',
+                        cashier_access_updated='1',
+                        active='1' if new_active else '0',
+                    )
+                )
+
+        elif action == 'toggle_cashier_export':
+            cid = (request.form.get('cashier_id') or '').strip()
+            target = _owned_cashier_for_owner(user, cid)
+            if not target:
+                error = 'Caissier introuvable ou action non autorisée.'
+            else:
+                cur_exp = bool(target.get('allow_export', True))
+                store.update_user(cid, {'allow_export': not cur_exp})
+                return redirect(url_for('settings', cashier_export_updated='1'))
+
+        else:
+            username = str(user.get('username') or '').strip().lower()[:64]
+            email = (request.form.get('email') or '').strip().lower()
+            gym_name = (request.form.get('gym_name') or '').strip()
+            address = (request.form.get('address') or '').strip()
+
+            if not username:
+                error = 'Identifiant de compte manquant (contactez le support).'
+            elif email and ('@' not in email or len(email) < 5):
+                error = 'Adresse email invalide.'
+            elif not all([gym_name, address]):
+                error = 'Le nom de la structure et l’adresse sont obligatoires.'
+            if not error and email:
+                other = store.get_user_by_email(email)
+                if other and str(other.get('id')) != str(user.get('id')):
+                    error = 'Cette adresse email est déjà utilisée.'
+            if not error:
+                try:
+                    phone = normalize_sn_mobile_phone(request.form.get('phone', ''))
+                except ValueError:
+                    error = _SN_PHONE_ERR_MSG
+                secondary_phone = ''
                 if not error:
-                    store.update_user(user['id'], updates)
-                    session['username'] = username
-                    session['email'] = email
-                    session['gym_name'] = gym_name
-                    session['full_name'] = gym_name
-                    session['phone'] = phone
-                    session['secondary_phone'] = secondary_phone
-                    session['address'] = address
-                    if hasattr(g, '_qrprint_user'):
-                        g.pop('_qrprint_user', None)
-                    return redirect(url_for('settings', updated='1'))
+                    raw_sec = (request.form.get('secondary_phone') or '').strip()
+                    if raw_sec:
+                        try:
+                            secondary_phone = normalize_sn_mobile_phone(raw_sec)
+                        except ValueError:
+                            error = _SN_PHONE_ERR_MSG
+                    if not error and secondary_phone == phone:
+                        error = 'Le 2e numéro doit être différent du numéro principal.'
+                if not error:
+                    by_phone = store.get_user_by_phone(phone)
+                    if by_phone and str(by_phone.get('id')) != str(user.get('id')):
+                        error = 'Ce numéro de téléphone est déjà utilisé par un autre compte.'
+                if not error:
+                    updates = {
+                        'email': email,
+                        'gym_name': gym_name,
+                        'full_name': gym_name,
+                        'phone': phone,
+                        'secondary_phone': secondary_phone,
+                        'address': address,
+                    }
+                    new_pw = (request.form.get('new_password') or '').strip()
+                    new_pw2 = (request.form.get('new_password_confirm') or '').strip()
+                    cur_pw = request.form.get('current_password') or ''
+                    if new_pw or new_pw2 or cur_pw:
+                        if not new_pw:
+                            error = 'Saisissez le nouveau mot de passe.'
+                        elif len(new_pw) < 8:
+                            error = 'Le nouveau mot de passe doit contenir au moins 8 caractères.'
+                        elif new_pw != new_pw2:
+                            error = 'La confirmation ne correspond pas au nouveau mot de passe.'
+                        elif not cur_pw:
+                            error = 'Saisissez votre mot de passe actuel pour le modifier.'
+                        else:
+                            pwd_hash = str(user.get('password_hash') or '')
+                            if not pwd_hash or not check_password_hash(pwd_hash, cur_pw):
+                                error = 'Mot de passe actuel incorrect.'
+                            else:
+                                updates['password_hash'] = generate_password_hash(new_pw)
+                    if not error:
+                        store.update_user(user['id'], updates)
+                        session['email'] = email
+                        session['gym_name'] = gym_name
+                        session['full_name'] = gym_name
+                        session['phone'] = phone
+                        session['secondary_phone'] = secondary_phone
+                        session['address'] = address
+                        oid = str(user.get('owner_id') or user.get('id') or '').strip()
+                        session['owner_id'] = oid
+                        if hasattr(g, '_qrprint_user'):
+                            g.pop('_qrprint_user', None)
+                        return redirect(url_for('settings', updated='1'))
 
     return render_template(
         'settings.html',
         error=error,
         user=user,
+        cashiers=cashiers,
+        next_cashier_username=next_cashier_username,
         settings_created_display=format_iso_datetime_display(user.get('created_at')),
     )
 
@@ -1598,10 +1976,20 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/dashboard')
+@app.route('/tickets')
 @require_admin_session
+def tickets():
+    """Liste des tickets QR (filtres, export)."""
+    return render_template(
+        'tickets.html',
+        tickets_author_options=_tickets_author_filter_choices(_current_owner_id()),
+    )
+
+
+@app.route('/dashboard')
+@require_gym_owner_session
 def dashboard():
-    """Dashboard administrateur"""
+    """Tableau de bord propriétaire de salle (en construction)."""
     return render_template('dashboard.html')
 
 
@@ -1724,10 +2112,16 @@ def create_qr():
         
         created_iso = datetime.utcnow().isoformat()
 
+        _act = _current_user()
+        cb_uid = str(_act.get('id') or '').strip() if _act else ''
+        cb_disp = _created_by_snapshot_label(_act) if _act else 'Owner'
+
         # Sauvegarde Firestore
         qr_id = store.create_qr({
             'id': qr_uuid,
             'owner_id': owner_id,
+            'created_by_user_id': cb_uid,
+            'created_by_display': cb_disp,
             'client_name': client_name,
             'client_firstname': client_firstname,
             'client_phone': client_phone,
@@ -1859,6 +2253,162 @@ def print_qr(qr_id):
         app.logger.error(f"Erreur lors de l'impression du QR Code: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/extend_qr/<qr_id>', methods=['POST'])
+@require_admin_session
+def extend_qr(qr_id):
+    """
+    Prolonge un ticket **expiré** : le document Firestore est mis à jour (pas de nouveau ticket),
+    avec un nouveau `qr_data` signé, `qr_hash`, dates d'expiration et `is_active` à True pour réimpression.
+    """
+    if not qr_id:
+        return jsonify({'success': False, 'error': 'ID manquant'}), 400
+
+    data = request.get_json(silent=True) or {}
+    expiration_option = (data.get('expiration') or '24h').strip().lower()
+    custom_hours = data.get('custom_hours')
+
+    if expiration_option == 'custom':
+        if custom_hours is None:
+            return jsonify({'success': False, 'error': 'Indiquez le nombre d\'heures pour une prolongation personnalisée.'}), 400
+        ch_str = str(custom_hours).strip()
+        if not ch_str:
+            return jsonify({'success': False, 'error': 'Indiquez le nombre d\'heures pour une prolongation personnalisée.'}), 400
+        try:
+            custom_hours_int = int(ch_str)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': "Nombre d'heures invalide."}), 400
+        if custom_hours_int < 1 or custom_hours_int > 8760:
+            return jsonify({'success': False, 'error': "La prolongation personnalisée doit être entre 1h et 8760h."}), 400
+        expiration_delta = timedelta(hours=custom_hours_int)
+    else:
+        expiration_delta = app.config['EXPIRATION_OPTIONS'].get(
+            expiration_option,
+            app.config['EXPIRATION_OPTIONS']['24h'],
+        )
+
+    expiration_delta = expiration_delta_minus_one_second(expiration_delta)
+    new_expiration_date = datetime.now() + expiration_delta
+
+    oid = _current_owner_id()
+    if not oid:
+        return jsonify({'success': False, 'error': 'Session invalide, reconnectez-vous.'}), 401
+
+    try:
+        qr_record = store.get_qr(qr_id, owner_id=oid)
+        if not qr_record:
+            return jsonify({'success': False, 'error': 'QR Code introuvable'}), 404
+        if not verify_qr_signature(qr_record.get('qr_data') or ''):
+            return jsonify({'success': False, 'error': 'Signature QR invalide'}), 400
+
+        exp_raw = str(qr_record.get('expiration_date') or '').strip()
+        if exp_raw.endswith('Z'):
+            exp_raw = exp_raw[:-1] + '+00:00'
+        try:
+            current_expiration = datetime.fromisoformat(exp_raw)
+        except ValueError:
+            return jsonify({'success': False, 'error': "Date d'expiration actuelle invalide"}), 400
+
+        if datetime.now() <= current_expiration:
+            return jsonify({'success': False, 'error': "Ce ticket n'est pas expiré : prolongation impossible."}), 400
+
+        def _amount_override_provided(d, key):
+            v = d.get(key)
+            if v is None:
+                return False
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return True
+            return bool(str(v).strip())
+
+        use_body_amounts = _amount_override_provided(data, 'amount_total') or _amount_override_provided(
+            data, 'amount_paid'
+        )
+        try:
+            if use_body_amounts:
+                amount_total = parse_amount_field(data.get('amount_total'), 'Le montant dû')
+                amount_paid = parse_amount_field(data.get('amount_paid'), 'Le montant payé')
+            else:
+                amount_total = parse_amount_field(qr_record.get('amount_total'), 'Montant dû')
+                amount_paid = parse_amount_field(qr_record.get('amount_paid'), 'Montant payé')
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+        if round(amount_paid, 2) > round(amount_total, 2):
+            return jsonify({
+                'success': False,
+                'error': 'Le montant payé ne peut pas dépasser le montant dû.',
+            }), 400
+
+        payment_mode = str(qr_record.get('payment_mode') or '').strip().lower()
+        if payment_mode not in PAYMENT_MODES:
+            payment_mode = 'especes'
+
+        subscription_type = str(qr_record.get('subscription_type') or '').strip()
+        if not subscription_type:
+            subscription_type = 'Séance'
+
+        qr_uuid = str(qr_record.get('id') or qr_id).strip()
+        ts_new = int(new_expiration_date.timestamp())
+
+        qr_data_dict = {
+            'uuid': qr_uuid,
+            'name': str(qr_record.get('client_name') or ''),
+            'firstname': str(qr_record.get('client_firstname') or ''),
+            'phone': str(qr_record.get('client_phone') or ''),
+            'email': str(qr_record.get('client_email') or ''),
+            'address': str(qr_record.get('client_address') or ''),
+            'ticket': str(qr_record.get('ticket_number') or ''),
+            'expires': ts_new,
+            'subscription_type': subscription_type,
+            'service': str(qr_record.get('service') or ''),
+            'amount_total': amount_total,
+            'amount_paid': amount_paid,
+            'payment_mode': payment_mode,
+        }
+
+        qr_data_json = json.dumps(qr_data_dict, sort_keys=True)
+        signed_qr_data = sign_qr_data(qr_data_json)
+        qr_hash = generate_qr_hash(signed_qr_data)
+
+        if store.qr_hash_exists(qr_hash, owner_id=oid, exclude_qr_id=qr_uuid):
+            return jsonify({
+                'success': False,
+                'error': 'Un autre QR identique existe déjà. Réessayez avec une autre durée.',
+            }), 409
+
+        updated = store.update_qr_fields(
+            qr_uuid,
+            {
+                'qr_data': signed_qr_data,
+                'qr_hash': qr_hash,
+                'expiration_date': new_expiration_date.isoformat(),
+                'expiration_ts': ts_new,
+                'is_active': True,
+                'printed_at': None,
+                'amount_total': amount_total,
+                'amount_paid': amount_paid,
+            },
+            owner_id=oid,
+        )
+        if not updated:
+            return jsonify({'success': False, 'error': 'QR Code introuvable'}), 404
+
+        _invalidate_list_qr_cache_for_owner(oid)
+
+        return jsonify({
+            'success': True,
+            'message': 'Ticket prolongé. Vous pouvez réimprimer le ticket avec le nouveau QR.',
+            'expiration_date': new_expiration_date.isoformat(),
+            'expiration_text': format_expiration_text(new_expiration_date),
+        })
+
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error('extend_qr', e)
+    except Exception as e:
+        app.logger.exception('extend_qr: %s', e)
+        return jsonify({'success': False, 'error': 'Erreur serveur'}), 500
+
+
 @app.route('/api/list_qr', methods=['GET'])
 @require_admin_session
 def list_qr():
@@ -1879,6 +2429,7 @@ def list_qr():
         ticket = (request.args.get('ticket') or '').strip()
         date_from = (request.args.get('date_from') or '').strip()
         date_to = (request.args.get('date_to') or '').strip()
+        author = (request.args.get('author') or '').strip()
         fetch_max = app.config.get('LIST_QR_FETCH_MAX', 3000)
         default_per_page = app.config.get('LIST_QR_PER_PAGE', 15)
 
@@ -1894,7 +2445,16 @@ def list_qr():
             page = 1
         page = max(1, page)
 
-        rows = _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, fetch_max, _current_owner_id())
+        rows = _fetch_qr_list_rows(
+            filter_type,
+            search,
+            ticket,
+            date_from,
+            date_to,
+            fetch_max,
+            _current_owner_id(),
+            author,
+        )
         total = len(rows)
         list_now = datetime.now()
         active_count, expired_count = _qr_list_stats_from_rows(rows, list_now)
@@ -1903,7 +2463,12 @@ def list_qr():
         if total_pages and page > total_pages:
             page = total_pages
         offset = (page - 1) * per_page
-        qr_page = _rows_to_qr_json_list(rows[offset : offset + per_page], list_now)
+        qr_page = _rows_to_qr_json_list(
+            rows[offset : offset + per_page],
+            list_now,
+            viewer_user=_current_user(),
+            owner_id=_current_owner_id(),
+        )
 
         payload = {
             'success': True,
@@ -1938,30 +2503,58 @@ def list_qr():
 @require_admin_session
 def export_qr():
     """Export CSV ou Excel des QR codes (mêmes filtres que la liste)."""
+    u = _current_user()
+    if not _user_can_export_tickets(u):
+        return jsonify(
+            {
+                'success': False,
+                'error': (
+                    'L’export de la liste des tickets (CSV / Excel) n’est pas activé pour votre compte caissier. '
+                    'Demandez au responsable de la salle de le permettre dans Paramètres.'
+                ),
+                'export_forbidden': True,
+            }
+        ), 403
     fmt = (request.args.get('format') or 'csv').lower().strip()
     filter_type = request.args.get('filter', 'all')
     search = (request.args.get('search') or '').strip()
     ticket = (request.args.get('ticket') or '').strip()
     date_from = (request.args.get('date_from') or '').strip()
     date_to = (request.args.get('date_to') or '').strip()
+    author = (request.args.get('author') or '').strip()
     max_rows = app.config.get('EXPORT_MAX_ROWS', 5000)
 
     try:
-        rows = _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, max_rows, _current_owner_id())
+        rows = _fetch_qr_list_rows(
+            filter_type,
+            search,
+            ticket,
+            date_from,
+            date_to,
+            max_rows,
+            _current_owner_id(),
+            author,
+        )
     except GoogleAPICallError as e:
         return jsonify_firestore_error("export_qr", e)
     headers = [
         'id', 'client_name', 'client_firstname', 'client_phone', 'client_email', 'client_address',
         'ticket_number', 'subscription_type', 'amount_total', 'amount_paid', 'payment_mode',
-        'service', 'created_at', 'expiration_date', 'printed_at', 'is_active', 'qr_hash',
+        'service', 'created_at', 'auteur', 'expiration_date', 'printed_at', 'is_active', 'qr_hash',
     ]
 
     if fmt == 'csv':
         si = StringIO()
         writer = csv.writer(si, delimiter=';', quoting=csv.QUOTE_MINIMAL)
         writer.writerow(headers)
+        oid = _current_owner_id()
         for row in rows:
-            writer.writerow([row.get(h) for h in headers])
+            writer.writerow(
+                [
+                    _created_by_cell_for_qr_row(row, u, oid) if h == 'auteur' else row.get(h)
+                    for h in headers
+                ]
+            )
         data = si.getvalue().encode('utf-8-sig')
         bio = BytesIO(data)
         bio.seek(0)
@@ -1979,8 +2572,14 @@ def export_qr():
         ws = wb.active
         ws.title = 'QR codes'
         ws.append(headers)
+        oid = _current_owner_id()
         for row in rows:
-            ws.append([row.get(h) for h in headers])
+            ws.append(
+                [
+                    _created_by_cell_for_qr_row(row, u, oid) if h == 'auteur' else row.get(h)
+                    for h in headers
+                ]
+            )
         bio = BytesIO()
         wb.save(bio)
         bio.seek(0)

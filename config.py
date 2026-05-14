@@ -96,7 +96,7 @@ class Config:
     SESSION_HOURS = _SESSION_HOURS
     PERMANENT_SESSION_LIFETIME = timedelta(hours=SESSION_HOURS)
     EXPORT_MAX_ROWS = int(os.environ.get('EXPORT_MAX_ROWS', '5000'))
-    # Tableau dashboard : plafond de lectures Firestore par requête liste.
+    # Liste des tickets (/tickets) : plafond de lectures Firestore par requête liste.
     # — Filtres « Actif » / « Expiré » : requêtes indexées (expiration_ts), puis tri affichage par created_at.
     # — Filtre « Tous » : uniquement les LIST_QR_FETCH_MAX tickets les plus récents (created_at), pas l’historique infini.
     # Rétrocompat : LIST_QR_MAX_ROWS utilisé si LIST_QR_FETCH_MAX absent.

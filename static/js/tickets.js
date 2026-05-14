@@ -1,35 +1,35 @@
-// Script pour le dashboard administrateur
+// Liste des tickets (/tickets) : filtres, tableau, export.
 
 let currentDeleteId = null;
 let filtersDebounceTimer = null;
-let dashboardListPage = 1;
-let dashboardTicketModalInstance = null;
-let dashboardTicketViewId = null;
+let ticketsListPage = 1;
+let ticketsTicketModalInstance = null;
+let ticketsTicketViewId = null;
 const QR_PER_PAGE = Math.min(100, Math.max(5, Number(document.body?.dataset?.qrPerPage || 15)));
-const DASHBOARD_REFRESH_MS = Math.max(
+const TICKETS_REFRESH_MS = Math.max(
     5000,
-    Number(document.body?.dataset?.dashboardRefreshMs || 120000)
+    Number(document.body?.dataset?.ticketsRefreshMs || 120000)
 );
 
 function scheduleQrReload(delayMs = 350) {
     if (filtersDebounceTimer) clearTimeout(filtersDebounceTimer);
-    dashboardListPage = 1;
-    renderDashboardFilterChips();
+    ticketsListPage = 1;
+    renderTicketsFilterChips();
     filtersDebounceTimer = setTimeout(loadQRCodes, delayMs);
 }
 
-function formatDashboardChipDate(iso) {
+function formatTicketsChipDate(iso) {
     if (!iso || iso.length < 10) return iso || '';
     const parts = iso.slice(0, 10).split('-');
     if (parts.length !== 3) return iso;
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-/** Pastilles des filtres non par défaut (dashboard). */
-function renderDashboardFilterChips() {
-    const wrap = document.getElementById('dashboardFilterChipsWrap');
-    const container = document.getElementById('dashboardFilterChips');
-    const clearAllBtn = document.getElementById('dashboardClearFiltersBtn');
+/** Pastilles des filtres non par défaut (liste tickets). */
+function renderTicketsFilterChips() {
+    const wrap = document.getElementById('ticketsFilterChipsWrap');
+    const container = document.getElementById('ticketsFilterChips');
+    const clearAllBtn = document.getElementById('ticketsClearFiltersBtn');
     if (!wrap || !container) return;
 
     const chips = [];
@@ -52,19 +52,27 @@ function renderDashboardFilterChips() {
 
     const dateFrom = document.getElementById('dateFrom')?.value || '';
     if (dateFrom) {
-        chips.push({ key: 'dateFrom', label: 'Créé du ' + formatDashboardChipDate(dateFrom) });
+        chips.push({ key: 'dateFrom', label: 'Créé du ' + formatTicketsChipDate(dateFrom) });
     }
 
     const dateTo = document.getElementById('dateTo')?.value || '';
     if (dateTo) {
-        chips.push({ key: 'dateTo', label: 'Créé au ' + formatDashboardChipDate(dateTo) });
+        chips.push({ key: 'dateTo', label: 'Créé au ' + formatTicketsChipDate(dateTo) });
+    }
+
+    const authorSel = document.getElementById('authorSelect');
+    const authorVal = authorSel?.value?.trim() || '';
+    if (authorVal) {
+        const labEl = document.getElementById('authorSelect_label');
+        const authorLab = labEl ? labEl.textContent.trim() : authorVal;
+        chips.push({ key: 'author', label: 'Auteur : ' + authorLab });
     }
 
     container.textContent = '';
     chips.forEach(function (c) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'dashboard-filter-chip';
+        btn.className = 'tickets-filter-chip';
         btn.setAttribute('data-chip-key', c.key);
         btn.title = 'Retirer ce filtre';
         const span = document.createElement('span');
@@ -75,7 +83,7 @@ function renderDashboardFilterChips() {
         btn.appendChild(span);
         btn.appendChild(icon);
         btn.addEventListener('click', function () {
-            clearDashboardChip(c.key);
+            clearTicketsChip(c.key);
         });
         container.appendChild(btn);
     });
@@ -87,8 +95,8 @@ function renderDashboardFilterChips() {
     }
 }
 
-function clearDashboardChip(key) {
-    dashboardListPage = 1;
+function clearTicketsChip(key) {
+    ticketsListPage = 1;
     if (key === 'filter') {
         const h = document.getElementById('filterSelect');
         const lab = document.getElementById('filterSelect_label');
@@ -106,13 +114,18 @@ function clearDashboardChip(key) {
     } else if (key === 'dateTo') {
         const el = document.getElementById('dateTo');
         if (el) el.value = '';
+    } else if (key === 'author') {
+        const hid = document.getElementById('authorSelect');
+        const lab = document.getElementById('authorSelect_label');
+        if (hid) hid.value = '';
+        if (lab) lab.textContent = 'Tous';
     }
-    renderDashboardFilterChips();
+    renderTicketsFilterChips();
     loadQRCodes();
 }
 
-function clearAllDashboardFilters() {
-    dashboardListPage = 1;
+function clearAllTicketsFilters() {
+    ticketsListPage = 1;
     const h = document.getElementById('filterSelect');
     const lab = document.getElementById('filterSelect_label');
     if (h) h.value = 'all';
@@ -125,7 +138,11 @@ function clearAllDashboardFilters() {
     if (df) df.value = '';
     const dt = document.getElementById('dateTo');
     if (dt) dt.value = '';
-    renderDashboardFilterChips();
+    const authorHid = document.getElementById('authorSelect');
+    if (authorHid) authorHid.value = '';
+    const authorLab = document.getElementById('authorSelect_label');
+    if (authorLab) authorLab.textContent = 'Tous';
+    renderTicketsFilterChips();
     loadQRCodes();
 }
 
@@ -159,7 +176,7 @@ function paymentModeLabel(code) {
 
 function redirectToLoginIfUnauthorized(response) {
     if (response.status === 401) {
-        window.location.href = '/login?next=' + encodeURIComponent('/dashboard');
+        window.location.href = '/login?next=' + encodeURIComponent('/tickets');
         return true;
     }
     return false;
@@ -191,7 +208,10 @@ function getFilterQueryString() {
     if (ticket) params.set('ticket', ticket);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
-    params.set('page', String(dashboardListPage));
+    const authorSel = document.getElementById('authorSelect');
+    const author = authorSel ? String(authorSel.value || '').trim() : '';
+    if (author) params.set('author', author);
+    params.set('page', String(ticketsListPage));
     params.set('per_page', String(QR_PER_PAGE));
     return params.toString();
 }
@@ -202,6 +222,15 @@ async function downloadExport(format) {
         const response = await fetch(`/api/export_qr?format=${encodeURIComponent(format)}&${qs}`);
         if (redirectToLoginIfUnauthorized(response)) return;
         if (!response.ok) {
+            if (response.status === 403) {
+                let msg = 'L’export de la liste des tickets n’est pas autorisé pour votre compte.';
+                try {
+                    const j = await response.json();
+                    if (j && j.error) msg = String(j.error);
+                } catch (_) {}
+                showToast('Export des tickets', msg, 'danger');
+                return;
+            }
             showToast('Erreur', 'Export impossible', 'danger');
             return;
         }
@@ -224,7 +253,7 @@ async function downloadExport(format) {
 document.addEventListener('DOMContentLoaded', function() {
     loadQRCodes();
 
-    const createQrLink = document.getElementById('dashboardCreateQrLink');
+    const createQrLink = document.getElementById('ticketsCreateQrLink');
     const homeUrl = document.body?.dataset?.appHome || '/';
     if (createQrLink && !createQrLink.getAttribute('href')) {
         createQrLink.setAttribute('href', homeUrl);
@@ -254,29 +283,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.getElementById('refreshBtn').addEventListener('click', loadQRCodes);
     document.getElementById('applyFiltersBtn').addEventListener('click', function () {
-        dashboardListPage = 1;
-        renderDashboardFilterChips();
+        ticketsListPage = 1;
+        renderTicketsFilterChips();
         loadQRCodes();
     });
 
-    const dashboardClearFiltersBtn = document.getElementById('dashboardClearFiltersBtn');
-    if (dashboardClearFiltersBtn) {
-        dashboardClearFiltersBtn.addEventListener('click', clearAllDashboardFilters);
+    const ticketsClearFiltersBtn = document.getElementById('ticketsClearFiltersBtn');
+    if (ticketsClearFiltersBtn) {
+        ticketsClearFiltersBtn.addEventListener('click', clearAllTicketsFilters);
     }
 
     const qrPagePrev = document.getElementById('qrPagePrev');
     const qrPageNext = document.getElementById('qrPageNext');
     if (qrPagePrev) {
         qrPagePrev.addEventListener('click', function () {
-            if (dashboardListPage > 1) {
-                dashboardListPage -= 1;
+            if (ticketsListPage > 1) {
+                ticketsListPage -= 1;
                 loadQRCodes();
             }
         });
     }
     if (qrPageNext) {
         qrPageNext.addEventListener('click', function () {
-            dashboardListPage += 1;
+            ticketsListPage += 1;
             loadQRCodes();
         });
     }
@@ -299,56 +328,129 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     if (filtersDebounceTimer) clearTimeout(filtersDebounceTimer);
-                    renderDashboardFilterChips();
+                    renderTicketsFilterChips();
                     loadQRCodes();
                 }
             });
         }
     });
 
-    document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+    const authorHidden = document.getElementById('authorSelect');
+    document.querySelectorAll('.dash-author-opt').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const val = this.dataset.value != null ? String(this.dataset.value) : '';
+            const lab = this.dataset.label != null ? String(this.dataset.label) : 'Tous';
+            if (authorHidden) authorHidden.value = val;
+            const labelEl = document.getElementById('authorSelect_label');
+            if (labelEl) labelEl.textContent = lab;
+            const toggle = document.getElementById('authorSelect_toggle');
+            if (toggle && window.bootstrap?.Dropdown) {
+                const inst = bootstrap.Dropdown.getInstance(toggle);
+                if (inst) inst.hide();
+            }
+            if (authorHidden) authorHidden.dispatchEvent(new Event('change'));
+        });
+    });
 
-    renderDashboardFilterChips();
+    if (authorHidden) {
+        authorHidden.addEventListener('change', function () {
+            scheduleQrReload(150);
+        });
+    }
 
-    const dashboardTicketPrintBtn = document.getElementById('dashboardTicketPrintBtn');
-    if (dashboardTicketPrintBtn) {
-        dashboardTicketPrintBtn.addEventListener('click', function () {
-            if (dashboardTicketViewId) {
-                reprintQRCode(dashboardTicketViewId);
+    initExtendQrExpirationDropdown();
+    const extendSubmit = document.getElementById('extendQrSubmitBtn');
+    if (extendSubmit) {
+        extendSubmit.addEventListener('click', async function () {
+            const id = document.getElementById('extendQrIdField')?.value?.trim();
+            if (!id) return;
+            const exp = document.getElementById('extendQrExpiration')?.value || '24h';
+            const totalIn = document.getElementById('extendQrAmountTotal');
+            const paidIn = document.getElementById('extendQrAmountPaid');
+            const amount_total = totalIn ? parseFloat(String(totalIn.value).replace(',', '.')) : NaN;
+            const amount_paid = paidIn ? parseFloat(String(paidIn.value).replace(',', '.')) : NaN;
+            if (!Number.isFinite(amount_total) || !Number.isFinite(amount_paid)) {
+                showToast('Erreur', 'Indiquez des montants valides.', 'danger');
+                return;
+            }
+            const body = { expiration: exp, amount_total, amount_paid };
+            if (exp === 'custom') {
+                body.custom_hours = document.getElementById('extendQrCustomHours')?.value;
+            }
+            extendSubmit.disabled = true;
+            try {
+                const response = await fetch('/api/extend_qr/' + encodeURIComponent(id), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify(body),
+                });
+                if (redirectToLoginIfUnauthorized(response)) return;
+                const data = await response.json().catch(function () {
+                    return {};
+                });
+                if (response.ok && data.success) {
+                    if (extendQrModalInstance) extendQrModalInstance.hide();
+                    showToast('Prolongation', data.message || 'Ticket prolongé', 'success');
+                    await loadQRCodes();
+                    viewQRCode(id);
+                } else {
+                    showToast('Erreur', data.error || 'Prolongation impossible', 'danger');
+                }
+            } catch (e) {
+                console.error(e);
+                showToast('Erreur', 'Erreur réseau', 'danger');
+            } finally {
+                extendSubmit.disabled = false;
             }
         });
     }
 
-    const dashboardTicketDownloadBtn = document.getElementById('dashboardTicketDownloadBtn');
-    if (dashboardTicketDownloadBtn) {
-        dashboardTicketDownloadBtn.addEventListener('click', function () {
-            downloadDashboardTicketPng();
+    document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+
+    renderTicketsFilterChips();
+
+    const ticketsTicketPrintBtn = document.getElementById('ticketsTicketPrintBtn');
+    if (ticketsTicketPrintBtn) {
+        ticketsTicketPrintBtn.addEventListener('click', function () {
+            if (ticketsTicketViewId) {
+                reprintQRCode(ticketsTicketViewId);
+            }
         });
     }
 
-    const dashboardTicketModal = document.getElementById('dashboardTicketModal');
-    if (dashboardTicketModal) {
-        dashboardTicketModal.addEventListener('shown.bs.modal', function () {
-            scheduleDashboardTicketModalScale();
-            setTimeout(scheduleDashboardTicketModalScale, 50);
+    const ticketsTicketDownloadBtn = document.getElementById('ticketsTicketDownloadBtn');
+    if (ticketsTicketDownloadBtn) {
+        ticketsTicketDownloadBtn.addEventListener('click', function () {
+            downloadTicketsTicketPng();
         });
     }
-    let dashboardTicketScaleResizeT = null;
+
+    const ticketsTicketModal = document.getElementById('ticketsTicketModal');
+    if (ticketsTicketModal) {
+        ticketsTicketModal.addEventListener('shown.bs.modal', function () {
+            scheduleTicketsTicketModalScale();
+            setTimeout(scheduleTicketsTicketModalScale, 50);
+        });
+    }
+    let ticketsTicketScaleResizeT = null;
     window.addEventListener('resize', function () {
-        clearTimeout(dashboardTicketScaleResizeT);
-        dashboardTicketScaleResizeT = setTimeout(scheduleDashboardTicketModalScale, 100);
+        clearTimeout(ticketsTicketScaleResizeT);
+        ticketsTicketScaleResizeT = setTimeout(scheduleTicketsTicketModalScale, 100);
     });
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', scheduleDashboardTicketModalScale);
+        window.visualViewport.addEventListener('resize', scheduleTicketsTicketModalScale);
     }
-    const dashboardTicketScaleOuter = document.querySelector('#dashboardTicketModal .ticket-modal-scale-outer');
-    if (dashboardTicketScaleOuter && typeof ResizeObserver !== 'undefined') {
+    const ticketsTicketScaleOuter = document.querySelector('#ticketsTicketModal .ticket-modal-scale-outer');
+    if (ticketsTicketScaleOuter && typeof ResizeObserver !== 'undefined') {
         new ResizeObserver(function () {
-            scheduleDashboardTicketModalScale();
-        }).observe(dashboardTicketScaleOuter);
+            scheduleTicketsTicketModalScale();
+        }).observe(ticketsTicketScaleOuter);
     }
 
-    setInterval(loadQRCodes, DASHBOARD_REFRESH_MS);
+    setInterval(loadQRCodes, TICKETS_REFRESH_MS);
 });
 
 async function loadQRCodes() {
@@ -357,8 +459,8 @@ async function loadQRCodes() {
 
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center">
-                <div class="spinner-border spinner-dashboard" role="status">
+                <td colspan="11" class="text-center">
+                <div class="spinner-border spinner-tickets" role="status">
                     <span class="visually-hidden">Chargement...</span>
                 </div>
             </td>
@@ -380,7 +482,7 @@ async function loadQRCodes() {
             const list = Array.isArray(data.qr_codes) ? data.qr_codes : [];
             const pg = data.pagination || null;
             if (pg && typeof pg.page === 'number') {
-                dashboardListPage = pg.page;
+                ticketsListPage = pg.page;
             }
             const rowOffset = pg ? (pg.page - 1) * (pg.per_page || QR_PER_PAGE) : 0;
             displayQRCodes(list, rowOffset);
@@ -398,7 +500,7 @@ async function loadQRCodes() {
             renderQrPagination(null);
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" class="text-center text-danger">
+                    <td colspan="11" class="text-center text-danger">
                         ${escapeHtml(msg)}
                     </td>
                 </tr>
@@ -412,7 +514,7 @@ async function loadQRCodes() {
         renderQrPagination(null);
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center text-danger">
+                <td colspan="11" class="text-center text-danger">
                     Erreur de connexion au serveur
                 </td>
             </tr>
@@ -461,7 +563,7 @@ function renderQrPagination(pg) {
             a.textContent = String(n);
             a.addEventListener('click', function (e) {
                 e.preventDefault();
-                dashboardListPage = n;
+                ticketsListPage = n;
                 loadQRCodes();
             });
             li.appendChild(a);
@@ -486,7 +588,7 @@ function displayQRCodes(qrCodes, rowOffset) {
         const home = escapeAttr(document.body?.dataset?.appHome || '/');
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center empty-state">
+                <td colspan="11" class="text-center empty-state">
                     <i class="bi bi-inbox"></i>
                     <p class="mt-3 mb-0">Aucune donnée</p>
                     <a href="${home}" class="btn btn-sm btn-primary mt-3 text-white text-decoration-none">Créer un QR code</a>
@@ -506,6 +608,8 @@ function displayQRCodes(qrCodes, rowOffset) {
         const ticket = qr.ticket_number ? '#' + escapeHtml(qr.ticket_number) : '-';
         const payment = escapeHtml(paymentModeLabel(qr.payment_mode));
         const service = escapeHtml(qr.service || '-');
+        const createdByRaw = String(qr.created_by != null && qr.created_by !== '' ? qr.created_by : '—');
+        const createdBy = escapeHtml(createdByRaw);
         const emailRaw = (qr.client_email || '').trim();
         const rowTip = [
             'N° affiché: ' + rowNum,
@@ -519,6 +623,7 @@ function displayQRCodes(qrCodes, rowOffset) {
             'Détail: ' + (qr.service || ''),
             'Paiement: ' + paymentModeLabel(qr.payment_mode),
             'Créé: ' + (qr.created_at || ''),
+            'Auteur: ' + createdByRaw,
             'Expire: ' + (qr.expiration_date || ''),
             qr.is_expired ? 'Statut: Expiré' : 'Statut: Actif'
         ].filter(Boolean).join(' | ');
@@ -535,32 +640,47 @@ function displayQRCodes(qrCodes, rowOffset) {
             statusBadge = '<span class="badge bg-success">Actif</span>';
         }
 
+        const amtTotalRaw = qr.amount_total;
+        const amtPaidRaw = qr.amount_paid;
+        const amtTotalNum = Number(amtTotalRaw);
+        const amtPaidNum = Number(amtPaidRaw);
+        const amtTotalSafe = Number.isFinite(amtTotalNum) ? amtTotalNum : 0;
+        const amtPaidSafe = Number.isFinite(amtPaidNum) ? amtPaidNum : 0;
+        const midActionBtn = qr.is_expired
+            ? `<button type="button" class="btn btn-outline-warning"
+                    onclick="openExtendQrModal('${escapeAttr(qr.id)}', ${JSON.stringify(amtTotalSafe)}, ${JSON.stringify(amtPaidSafe)})"
+                    title="Prolonger le ticket (nouvelle expiration, même numéro)">
+                    <i class="bi bi-calendar-plus" aria-hidden="true"></i>
+                </button>`
+            : `<button type="button" class="btn btn-outline-success"
+                    onclick="reprintQRCode('${escapeAttr(qr.id)}')"
+                    title="Réimprimer"
+                    ${qr.is_active === false ? 'disabled' : ''}>
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                </button>`;
+
         return `
             <tr${rowTitleAttr}>
                 <td class="text-center align-middle fw-semibold text-muted">${rowNum}</td>
-                <td class="text-start align-middle" title="${escapeAttr(clientNameRaw)}">${clientName}</td>
+                <td class="text-start align-middle col-qr-client" title="${escapeAttr(clientNameRaw)}">${clientName}</td>
                 <td class="text-start align-middle" title="${escapeAttr(qr.client_phone || '')}">${phone}</td>
                 <td class="text-start align-middle" title="${escapeAttr(qr.ticket_number || '')}">${ticket}</td>
                 <td class="text-start align-middle" title="${escapeAttr(qr.payment_mode || '')}">${payment}</td>
                 <td class="text-start align-middle" title="${escapeAttr((qr.subscription_type || '') + (qr.service ? ' — ' + qr.service : ''))}">${service}</td>
-                <td class="text-start align-middle" title="${escapeAttr(qr.created_at || '')}"><small>${createdDate}</small></td>
-                <td class="text-start align-middle" title="${escapeAttr(qr.expiration_date || '')}"><small>${expirationDate}</small></td>
+                <td class="text-start align-middle" title="${escapeAttr(qr.created_at || '')}">${createdDate}</td>
+                <td class="text-start align-middle col-qr-created-by" title="${escapeAttr(createdByRaw)}">${createdBy}</td>
+                <td class="text-start align-middle" title="${escapeAttr(qr.expiration_date || '')}">${expirationDate}</td>
                 <td class="text-center align-middle td-qr-statut">${statusBadge}</td>
                 <td class="text-center align-middle td-qr-actions">
                     <div class="btn-group btn-group-sm" role="group">
                         <button type="button" class="btn btn-outline-primary"
-                                onclick="viewQRCode('${qr.id}')"
+                                onclick="viewQRCode('${escapeAttr(qr.id)}')"
                                 title="Voir">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-success"
-                                onclick="reprintQRCode('${qr.id}')"
-                                title="Réimprimer"
-                                ${qr.is_expired || qr.is_active === false ? 'disabled' : ''}>
-                            <i class="bi bi-printer"></i>
-                        </button>
+                        ${midActionBtn}
                         <button type="button" class="btn btn-outline-danger"
-                                onclick="deleteQRCode('${qr.id}')"
+                                onclick="deleteQRCode('${escapeAttr(qr.id)}')"
                                 title="Supprimer">
                             <i class="bi bi-trash"></i>
                         </button>
@@ -593,7 +713,7 @@ function updateStatisticsFromList(qrCodes) {
 /**
  * Affiche le ticket complet dans une modale (même rendu que la page d’accueil).
  */
-function renderDashboardTicketSheet(container, payload) {
+function renderTicketsTicketSheet(container, payload) {
     if (!container || !payload) return;
     container.classList.add('ticket-receipt-modern');
     container.innerHTML = '';
@@ -699,10 +819,10 @@ function renderDashboardTicketSheet(container, payload) {
 }
 
 /** Même logique que scheduleTicketScale sur l’accueil : ticket entier visible sur mobile. */
-function scheduleDashboardTicketModalScale() {
+function scheduleTicketsTicketModalScale() {
     if (typeof applyProportionalTicketScale !== 'function') return;
-    const modalEl = document.getElementById('dashboardTicketModal');
-    const outer = document.querySelector('#dashboardTicketModal .ticket-modal-scale-outer');
+    const modalEl = document.getElementById('ticketsTicketModal');
+    const outer = document.querySelector('#ticketsTicketModal .ticket-modal-scale-outer');
     if (!modalEl || !outer || !modalEl.classList.contains('show')) return;
     requestAnimationFrame(function () {
         requestAnimationFrame(function () {
@@ -712,12 +832,12 @@ function scheduleDashboardTicketModalScale() {
 }
 
 async function viewQRCode(qrId) {
-    const modalEl = document.getElementById('dashboardTicketModal');
-    const sheet = document.getElementById('dashboardTicketPreview');
-    const titleEl = document.getElementById('dashboardTicketModalLabel');
+    const modalEl = document.getElementById('ticketsTicketModal');
+    const sheet = document.getElementById('ticketsTicketPreview');
+    const titleEl = document.getElementById('ticketsTicketModalLabel');
     if (!modalEl || !sheet) return;
 
-    dashboardTicketViewId = qrId;
+    ticketsTicketViewId = qrId;
     sheet.innerHTML =
         '<div class="text-center py-5"><div class="spinner-border text-primary" role="status">' +
         '<span class="visually-hidden">Chargement...</span></div></div>';
@@ -726,15 +846,15 @@ async function viewQRCode(qrId) {
         titleEl.textContent = 'Aperçu du ticket';
     }
 
-    if (!dashboardTicketModalInstance) {
-        dashboardTicketModalInstance = new bootstrap.Modal(modalEl);
+    if (!ticketsTicketModalInstance) {
+        ticketsTicketModalInstance = new bootstrap.Modal(modalEl);
     }
-    dashboardTicketModalInstance.show();
+    ticketsTicketModalInstance.show();
 
     try {
         const response = await fetch('/api/qr_ticket_preview/' + encodeURIComponent(qrId));
         if (redirectToLoginIfUnauthorized(response)) {
-            dashboardTicketModalInstance.hide();
+            ticketsTicketModalInstance.hide();
             return;
         }
         const data = await response.json().catch(function () {
@@ -742,12 +862,12 @@ async function viewQRCode(qrId) {
         });
 
         if (!response.ok || !data.success) {
-            dashboardTicketModalInstance.hide();
+            ticketsTicketModalInstance.hide();
             showToast('Erreur', data.error || 'Impossible de charger le ticket', 'danger');
             return;
         }
 
-        renderDashboardTicketSheet(sheet, data);
+        renderTicketsTicketSheet(sheet, data);
 
         if (titleEl) {
             const tn = data.ticket_number;
@@ -756,23 +876,23 @@ async function viewQRCode(qrId) {
                 : 'Aperçu du ticket';
         }
 
-        scheduleDashboardTicketModalScale();
-        setTimeout(scheduleDashboardTicketModalScale, 80);
-        setTimeout(scheduleDashboardTicketModalScale, 280);
+        scheduleTicketsTicketModalScale();
+        setTimeout(scheduleTicketsTicketModalScale, 80);
+        setTimeout(scheduleTicketsTicketModalScale, 280);
 
-        const printBtn = document.getElementById('dashboardTicketPrintBtn');
+        const printBtn = document.getElementById('ticketsTicketPrintBtn');
         if (printBtn) {
             printBtn.disabled = !!(data.is_expired || !data.is_active);
         }
     } catch (e) {
         console.error(e);
-        dashboardTicketModalInstance.hide();
+        ticketsTicketModalInstance.hide();
         showToast('Erreur', 'Impossible de charger le ticket', 'danger');
     }
 }
 
-async function downloadDashboardTicketPng() {
-    const source = document.getElementById('dashboardTicketPreview');
+async function downloadTicketsTicketPng() {
+    const source = document.getElementById('ticketsTicketPreview');
     if (!source || source.querySelector('.spinner-border')) {
         showToast('Erreur', 'Ticket encore en chargement ou indisponible', 'warning');
         return;
@@ -787,11 +907,11 @@ async function downloadDashboardTicketPng() {
     }
     try {
         const canvas = await html2canvasTicketSheet(source);
-        scheduleDashboardTicketModalScale();
+        scheduleTicketsTicketModalScale();
 
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png');
-        link.download = 'ticket-' + (dashboardTicketViewId || 'download') + '.png';
+        link.download = 'ticket-' + (ticketsTicketViewId || 'download') + '.png';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -804,7 +924,7 @@ async function downloadDashboardTicketPng() {
 
 async function reprintQRCode(qrId) {
     try {
-        const response = await fetch(`/api/print_qr/${qrId}`, {
+        const response = await fetch(`/api/print_qr/${encodeURIComponent(qrId)}`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': getCSRFToken()
@@ -822,6 +942,73 @@ async function reprintQRCode(qrId) {
         console.error('Erreur:', error);
         showToast('Erreur', 'Impossible de se connecter à l\'imprimante', 'danger');
     }
+}
+
+let extendQrModalInstance = null;
+
+const EXTEND_QR_EXPIRATION_LABELS = {
+    '24h': '24 heures',
+    '7j': '7 jours',
+    '30j': '30 jours',
+    custom: 'Personnalisé',
+};
+
+function closeExtendQrExpirationDropdown() {
+    const toggle = document.getElementById('extendQrExpiration_toggle');
+    if (toggle && window.bootstrap?.Dropdown) {
+        const inst = bootstrap.Dropdown.getInstance(toggle);
+        if (inst) inst.hide();
+    }
+}
+
+function initExtendQrExpirationDropdown() {
+    const modal = document.getElementById('extendQrModal');
+    if (!modal) return;
+    modal.querySelectorAll('.qrp-dd-opt[data-target="extendQrExpiration"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const targetId = this.dataset.target;
+            const val = this.dataset.value;
+            const label = this.dataset.label;
+            const hidden = document.getElementById(targetId);
+            const labelEl = document.getElementById(`${targetId}_label`);
+            if (hidden) hidden.value = val;
+            if (labelEl) labelEl.textContent = label;
+            closeExtendQrExpirationDropdown();
+            if (targetId === 'extendQrExpiration') refreshExtendCustomVisibility();
+        });
+    });
+}
+
+function refreshExtendCustomVisibility() {
+    const hidden = document.getElementById('extendQrExpiration');
+    const wrap = document.getElementById('extendQrCustomWrap');
+    if (!hidden || !wrap) return;
+    wrap.classList.toggle('d-none', hidden.value !== 'custom');
+}
+
+function openExtendQrModal(qrId, amountTotal, amountPaid) {
+    if (!qrId) return;
+    const modalEl = document.getElementById('extendQrModal');
+    const idField = document.getElementById('extendQrIdField');
+    const hiddenExp = document.getElementById('extendQrExpiration');
+    const expLabel = document.getElementById('extendQrExpiration_label');
+    const hours = document.getElementById('extendQrCustomHours');
+    const totalEl = document.getElementById('extendQrAmountTotal');
+    const paidEl = document.getElementById('extendQrAmountPaid');
+    if (!modalEl || !idField || !hiddenExp) return;
+    idField.value = qrId;
+    hiddenExp.value = '24h';
+    if (expLabel) expLabel.textContent = EXTEND_QR_EXPIRATION_LABELS['24h'] || '24 heures';
+    if (hours) hours.value = '';
+    const at = Number(amountTotal);
+    const ap = Number(amountPaid);
+    if (totalEl) totalEl.value = Number.isFinite(at) ? String(at) : '';
+    if (paidEl) paidEl.value = Number.isFinite(ap) ? String(ap) : '';
+    refreshExtendCustomVisibility();
+    if (!extendQrModalInstance) {
+        extendQrModalInstance = new bootstrap.Modal(modalEl);
+    }
+    extendQrModalInstance.show();
 }
 
 function deleteQRCode(qrId) {

@@ -1,6 +1,6 @@
 /**
  * Mise à l’échelle proportionnelle du ticket (56ch) comme une « image » responsive.
- * Utilisé par la page d’accueil et le dashboard (modales + carte QR).
+ * Utilisé par la page d’accueil et la liste Tickets (modales + carte QR).
  */
 
 function ticketViewportMetrics() {
