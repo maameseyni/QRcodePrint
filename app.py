@@ -12,7 +12,7 @@ import json
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from io import BytesIO, StringIO
 
@@ -466,6 +466,11 @@ def require_gym_owner_session(func):
             return redirect_to_login()
         role = str(u.get('role') or '').strip().lower()
         if role in ('operator', 'cashier'):
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'success': False,
+                    'error': 'Accès réservé au propriétaire de la salle (dashboard).',
+                }), 403
             if role == 'cashier':
                 return redirect(url_for('tickets'))
             return redirect(url_for('index'))
@@ -1313,6 +1318,110 @@ def _created_by_cell_for_qr_row(row: dict, viewer_user: dict, owner_id: str) -> 
     return '—'
 
 
+def _row_amount(val):
+    """Montant numérique depuis un champ Firestore (QR)."""
+    if val is None or (isinstance(val, str) and not str(val).strip()):
+        return 0.0
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _row_created_date_key(row) -> str:
+    """Date locale YYYY-MM-DD (created_at stocké en UTC naïf) pour agrégats jour / mois."""
+    created_str = str(row.get('created_at') or '').strip()
+    if not created_str:
+        return ''
+    s = created_str
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        return created_str[:10] if len(created_str) >= 10 else ''
+
+
+def _dashboard_stats_from_rows(rows, now=None):
+    """Statistiques financières et suivi pour le dashboard propriétaire (une passe sur les lignes déjà filtrées)."""
+    if now is None:
+        now = datetime.now()
+    today_key = now.strftime('%Y-%m-%d')
+    month_key = now.strftime('%Y-%m')
+
+    total_tickets = 0
+    active_count = 0
+    expired_count = 0
+    revenue_total = 0.0
+    revenue_today = 0.0
+    revenue_month = 0.0
+    amount_due_total = 0.0
+    outstanding_total = 0.0
+    printed_count = 0
+    payment_totals = {m: 0.0 for m in PAYMENT_MODES}
+    payment_counts = {m: 0 for m in PAYMENT_MODES}
+
+    for row in rows:
+        total_tickets += 1
+        is_active_flag = bool(row.get('is_active', True))
+        expiration_raw = str(row.get('expiration_date') or '')
+        try:
+            expiration_date = datetime.fromisoformat(expiration_raw)
+            is_expired = now > expiration_date
+        except ValueError:
+            is_expired = True
+        if not is_expired and is_active_flag:
+            active_count += 1
+        else:
+            expired_count += 1
+
+        paid = _row_amount(row.get('amount_paid'))
+        due = _row_amount(row.get('amount_total'))
+        revenue_total += paid
+        amount_due_total += due
+        outstanding_total += max(0.0, round(due - paid, 2))
+
+        created_key = _row_created_date_key(row)
+        if created_key == today_key:
+            revenue_today += paid
+        if created_key.startswith(month_key):
+            revenue_month += paid
+
+        if str(row.get('printed_at') or '').strip():
+            printed_count += 1
+
+        pm = str(row.get('payment_mode') or '').strip().lower()
+        if pm in PAYMENT_MODES:
+            payment_totals[pm] += paid
+            payment_counts[pm] += 1
+
+    avg_ticket = round(revenue_total / total_tickets, 2) if total_tickets else 0.0
+
+    return {
+        'total_tickets': total_tickets,
+        'active': active_count,
+        'expired': expired_count,
+        'revenue_total': round(revenue_total, 2),
+        'revenue_today': round(revenue_today, 2),
+        'revenue_month': round(revenue_month, 2),
+        'amount_due_total': round(amount_due_total, 2),
+        'outstanding': round(outstanding_total, 2),
+        'avg_ticket': avg_ticket,
+        'printed_count': printed_count,
+        'payment_breakdown': {
+            mode: {
+                'count': payment_counts[mode],
+                'amount': round(payment_totals[mode], 2),
+                'label': payment_mode_label(mode),
+            }
+            for mode in PAYMENT_MODES
+        },
+    }
+
+
 def _qr_list_stats_from_rows(rows, now=None):
     """Compteurs actifs / expirés alignés sur la logique de _rows_to_qr_json_list (une passe, sans construire les dicts)."""
     if now is None:
@@ -1989,8 +2098,35 @@ def tickets():
 @app.route('/dashboard')
 @require_gym_owner_session
 def dashboard():
-    """Tableau de bord propriétaire de salle (en construction)."""
-    return render_template('dashboard.html')
+    """Tableau de bord propriétaire : finances et suivi."""
+    return render_template(
+        'dashboard.html',
+        dashboard_fetch_max=app.config.get('LIST_QR_FETCH_MAX', 3000),
+    )
+
+
+@app.route('/api/dashboard_stats', methods=['GET'])
+@require_gym_owner_session
+def dashboard_stats():
+    """Agrégats financiers et suivi pour les cartes du dashboard (données du propriétaire connecté)."""
+    try:
+        fetch_max = app.config.get('LIST_QR_FETCH_MAX', 3000)
+        rows = _fetch_qr_list_rows('all', '', '', '', '', fetch_max, _current_owner_id())
+        stats = _dashboard_stats_from_rows(rows)
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'meta': {
+                'rows_analyzed': len(rows),
+                'fetch_max': fetch_max,
+                'capped': len(rows) >= fetch_max,
+            },
+        })
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error('dashboard_stats', e)
+    except Exception as e:
+        app.logger.error('dashboard_stats: %s', e)
+        return jsonify({'success': False, 'error': 'Erreur interne'}), 500
 
 
 # APIs REST

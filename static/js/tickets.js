@@ -591,7 +591,7 @@ function displayQRCodes(qrCodes, rowOffset) {
                 <td colspan="11" class="text-center empty-state">
                     <i class="bi bi-inbox"></i>
                     <p class="mt-3 mb-0">Aucune donnée</p>
-                    <a href="${home}" class="btn btn-sm btn-primary mt-3 text-white text-decoration-none">Créer un QR code</a>
+                    <a href="${home}" class="btn btn-sm btn-primary mt-3 text-white text-decoration-none">Créer un ticket</a>
                 </td>
             </tr>
         `;
