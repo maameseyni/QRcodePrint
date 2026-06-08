@@ -214,9 +214,9 @@ function applyProportionalTicketScale(outerEl) {
         else s *= 0.98;
     }
 
-    /* Carte accueil : léger zoom supplémentaire dans la boîte (scroll si besoin). */
+    /* Carte accueil : léger zoom dans la boîte (scroll si besoin) */
     if (!isModal && outerEl.closest('.ticket-index-scroll-band') && s > 0) {
-        s = Math.min(1, s * 1.06);
+        s = Math.min(1, s * 1.02);
     }
 
     /* Marge anti-coupe : derniers pixels du ticket parfois masqués par transform / sous-pixels */

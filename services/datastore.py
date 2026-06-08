@@ -46,6 +46,7 @@ class QueryFilters:
     filter_type: str = "all"
     search: str = ""
     ticket: str = ""
+    payment_mode: str = ""
     date_from: str = ""
     date_to: str = ""
     limit: int = 500
@@ -356,55 +357,19 @@ class FirestoreDataStore:
         query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
         return self._stream_limited(query, cap, "list_qr legacy created_at")
 
-    def _fetch_rows_active(self, oid: str, cap: int) -> List[Dict[str, Any]]:
-        """QR encore valides : index expiration_ts + is_active (tri affichage = created_at)."""
-        now_ts = _now_ts()
-        q = self._col("qr_codes")
-        q = q.where(filter=FieldFilter("owner_id", "==", oid))
-        q = q.where(filter=FieldFilter("is_active", "==", True))
-        q = q.where(filter=FieldFilter("expiration_ts", ">", now_ts))
-        q = q.order_by("expiration_ts", direction=firestore.Query.DESCENDING)
-        rows = self._stream_limited(q, cap, "list_qr active")
-        return self._sort_rows_by_created_at_desc(rows)
-
     def _fetch_rows_all(self, oid: str, cap: int) -> List[Dict[str, Any]]:
         q = self._col("qr_codes")
         q = q.where(filter=FieldFilter("owner_id", "==", oid))
         q = q.order_by("created_at", direction=firestore.Query.DESCENDING)
         return self._stream_limited(q, cap, "list_qr tous")
 
-    def _fetch_rows_expired(self, oid: str, cap: int) -> List[Dict[str, Any]]:
-        """Réunion : désactivés OU date dépassée (expiration_ts). Dédup par id."""
-        now_ts = _now_ts()
-        by_id: Dict[str, Dict[str, Any]] = {}
-
-        q_inactive = self._col("qr_codes")
-        q_inactive = q_inactive.where(filter=FieldFilter("owner_id", "==", oid))
-        q_inactive = q_inactive.where(filter=FieldFilter("is_active", "==", False))
-        q_inactive = q_inactive.order_by("created_at", direction=firestore.Query.DESCENDING)
-        for row in self._stream_limited(q_inactive, cap, "list_qr expirés (inactifs)"):
-            by_id[str(row.get("id"))] = row
-
-        q_date = self._col("qr_codes")
-        q_date = q_date.where(filter=FieldFilter("owner_id", "==", oid))
-        q_date = q_date.where(filter=FieldFilter("expiration_ts", "<=", now_ts))
-        q_date = q_date.order_by("expiration_ts", direction=firestore.Query.DESCENDING)
-        for row in self._stream_limited(q_date, cap, "list_qr expirés (date)"):
-            by_id[str(row.get("id"))] = row
-
-        rows = list(by_id.values())
-        return self._sort_rows_by_created_at_desc(rows)
-
     def list_qr(self, filters: QueryFilters, owner_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Liste filtrée : requêtes Firestore alignées sur le statut (plus seulement les N derniers créés).
-        Nécessite le champ expiration_ts sur les documents (rempli à la création / import).
+        Liste filtrée : une seule lecture Firestore par appel (owner + created_at desc, plafonnée),
+        puis filtres Actif / Expiré / recherche / dates en mémoire (_apply_filters).
+        Les tickets hors des LIST_QR_FETCH_MAX plus récents ne sont pas visibles (quel que soit le filtre).
         """
         cap = max(filters.limit, 1)
-        ft = (filters.filter_type or "all").strip().lower()
-        if ft not in ("all", "active", "expired"):
-            ft = "all"
-
         oid = str(owner_id or "").strip()
         if not oid:
             query = self._col("qr_codes")
@@ -414,16 +379,11 @@ class FirestoreDataStore:
 
         rows: List[Dict[str, Any]] = []
         try:
-            if ft == "active":
-                rows = self._fetch_rows_active(oid, cap)
-            elif ft == "expired":
-                rows = self._fetch_rows_expired(oid, cap)
-            else:
-                rows = self._fetch_rows_all(oid, cap)
+            rows = self._fetch_rows_all(oid, cap)
         except GoogleAPICallError:
             raise
         except Exception as e:
-            logger.warning("list_qr requête indexée impossible (%s), repli fenêtre created_at: %s", ft, e)
+            logger.warning("list_qr requête impossible, repli fenêtre created_at: %s", e)
             rows = self._list_qr_legacy_created_window(oid, cap)
 
         return self._apply_filters(rows, filters)
@@ -434,6 +394,9 @@ class FirestoreDataStore:
         out: List[Dict[str, Any]] = []
         search_l = (filters.search or "").strip().lower()
         ticket_l = (filters.ticket or "").strip().lower()
+        pay_exact = (filters.payment_mode or "").strip().lower()
+        if pay_exact not in ("", "especes", "orange_money", "wave"):
+            pay_exact = ""
         date_from = (filters.date_from or "").strip()
         date_to = (filters.date_to or "").strip()
 
@@ -454,6 +417,14 @@ class FirestoreDataStore:
             if filters.filter_type == "expired" and (is_active and not is_expired):
                 continue
 
+            tn_raw = str(row.get("ticket_number") or "").strip()
+            tn_low = tn_raw.lower()
+            ticket_hay_parts = []
+            if tn_low:
+                ticket_hay_parts.append(tn_low)
+                if not tn_low.startswith('#'):
+                    ticket_hay_parts.append('#' + tn_low)
+
             haystack = " ".join(
                 [
                     str(row.get("client_name") or ""),
@@ -462,7 +433,9 @@ class FirestoreDataStore:
                     str(row.get("client_address") or ""),
                     str(row.get("client_phone") or ""),
                     str(row.get("subscription_type") or ""),
+                    str(row.get("service") or ""),
                     str(row.get("payment_mode") or ""),
+                    *ticket_hay_parts,
                 ]
             ).lower()
             if search_l and search_l not in haystack:
@@ -471,6 +444,11 @@ class FirestoreDataStore:
             ticket_val = str(row.get("ticket_number") or "").lower()
             if ticket_l and ticket_l not in ticket_val:
                 continue
+
+            if pay_exact:
+                row_pay = str(row.get("payment_mode") or "").strip().lower()
+                if row_pay != pay_exact:
+                    continue
 
             # Filtre date: compare YYYY-MM-DD sur created_at ISO.
             created_date = created_str[:10] if len(created_str) >= 10 else ""

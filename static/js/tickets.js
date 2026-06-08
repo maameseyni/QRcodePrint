@@ -45,9 +45,11 @@ function renderTicketsFilterChips() {
         chips.push({ key: 'search', label: 'Recherche : ' + search });
     }
 
-    const ticket = document.getElementById('ticketInput')?.value?.trim() || '';
-    if (ticket) {
-        chips.push({ key: 'ticket', label: 'N° ticket : ' + ticket });
+    const payHid = document.getElementById('paymentModeSelect');
+    const payVal = payHid?.value?.trim() || '';
+    if (payVal) {
+        const payLab = document.getElementById('paymentModeSelect_label')?.textContent?.trim() || '';
+        chips.push({ key: 'payment', label: 'Paiement : ' + payLab });
     }
 
     const dateFrom = document.getElementById('dateFrom')?.value || '';
@@ -105,9 +107,11 @@ function clearTicketsChip(key) {
     } else if (key === 'search') {
         const el = document.getElementById('searchInput');
         if (el) el.value = '';
-    } else if (key === 'ticket') {
-        const el = document.getElementById('ticketInput');
-        if (el) el.value = '';
+    } else if (key === 'payment') {
+        const hid = document.getElementById('paymentModeSelect');
+        const lab = document.getElementById('paymentModeSelect_label');
+        if (hid) hid.value = '';
+        if (lab) lab.textContent = 'Tous';
     } else if (key === 'dateFrom') {
         const el = document.getElementById('dateFrom');
         if (el) el.value = '';
@@ -132,8 +136,10 @@ function clearAllTicketsFilters() {
     if (lab) lab.textContent = 'Tous';
     const searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.value = '';
-    const ticketInput = document.getElementById('ticketInput');
-    if (ticketInput) ticketInput.value = '';
+    const payHid = document.getElementById('paymentModeSelect');
+    if (payHid) payHid.value = '';
+    const payLab = document.getElementById('paymentModeSelect_label');
+    if (payLab) payLab.textContent = 'Tous';
     const df = document.getElementById('dateFrom');
     if (df) df.value = '';
     const dt = document.getElementById('dateTo');
@@ -201,11 +207,13 @@ function getFilterQueryString() {
     const params = new URLSearchParams();
     params.set('filter', document.getElementById('filterSelect').value);
     const search = document.getElementById('searchInput').value.trim();
-    const ticket = document.getElementById('ticketInput').value.trim();
     const dateFrom = document.getElementById('dateFrom').value;
     const dateTo = document.getElementById('dateTo').value;
     if (search) params.set('search', search);
-    if (ticket) params.set('ticket', ticket);
+    const pay = document.getElementById('paymentModeSelect')
+        ? String(document.getElementById('paymentModeSelect').value || '').trim()
+        : '';
+    if (pay) params.set('payment_mode', pay);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
     const authorSel = document.getElementById('authorSelect');
@@ -315,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => downloadExport('csv'));
     if (exportXlsxBtn) exportXlsxBtn.addEventListener('click', () => downloadExport('xlsx'));
 
-    ['searchInput', 'ticketInput', 'dateFrom', 'dateTo'].forEach(function(id) {
+    ['searchInput', 'dateFrom', 'dateTo'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('input', function() {
@@ -354,6 +362,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (authorHidden) {
         authorHidden.addEventListener('change', function () {
+            scheduleQrReload(150);
+        });
+    }
+
+    const paymentHidden = document.getElementById('paymentModeSelect');
+    document.querySelectorAll('.tickets-payment-opt').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const val = this.dataset.value != null ? String(this.dataset.value) : '';
+            const lab = this.dataset.label != null ? String(this.dataset.label) : 'Tous';
+            if (paymentHidden) paymentHidden.value = val;
+            const labelEl = document.getElementById('paymentModeSelect_label');
+            if (labelEl) labelEl.textContent = lab;
+            const toggle = document.getElementById('paymentModeSelect_toggle');
+            if (toggle && window.bootstrap?.Dropdown) {
+                const inst = bootstrap.Dropdown.getInstance(toggle);
+                if (inst) inst.hide();
+            }
+            if (paymentHidden) paymentHidden.dispatchEvent(new Event('change'));
+        });
+    });
+
+    if (paymentHidden) {
+        paymentHidden.addEventListener('change', function () {
             scheduleQrReload(150);
         });
     }
@@ -610,14 +641,11 @@ function displayQRCodes(qrCodes, rowOffset) {
         const service = escapeHtml(qr.service || '-');
         const createdByRaw = String(qr.created_by != null && qr.created_by !== '' ? qr.created_by : '—');
         const createdBy = escapeHtml(createdByRaw);
-        const emailRaw = (qr.client_email || '').trim();
         const rowTip = [
             'N° affiché: ' + rowNum,
             'ID technique: ' + (qr.id || ''),
             'Client: ' + clientNameRaw,
             'Tél: ' + (qr.client_phone || ''),
-            'Email: ' + emailRaw,
-            (qr.client_address || '').trim() ? 'Adresse: ' + (qr.client_address || '') : '',
             'Ticket: ' + (qr.ticket_number || ''),
             'Prestation: ' + (qr.subscription_type || ''),
             'Détail: ' + (qr.service || ''),

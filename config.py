@@ -96,9 +96,8 @@ class Config:
     SESSION_HOURS = _SESSION_HOURS
     PERMANENT_SESSION_LIFETIME = timedelta(hours=SESSION_HOURS)
     EXPORT_MAX_ROWS = int(os.environ.get('EXPORT_MAX_ROWS', '5000'))
-    # Liste des tickets (/tickets) : plafond de lectures Firestore par requête liste.
-    # — Filtres « Actif » / « Expiré » : requêtes indexées (expiration_ts), puis tri affichage par created_at.
-    # — Filtre « Tous » : uniquement les LIST_QR_FETCH_MAX tickets les plus récents (created_at), pas l’historique infini.
+    # Liste des tickets (/tickets) : une requête Firestore par chargement (owner + created_at, plafonnée),
+    # filtres Actif / Expiré appliqués en mémoire. Hors des LIST_QR_FETCH_MAX plus récents : non listés.
     # Rétrocompat : LIST_QR_MAX_ROWS utilisé si LIST_QR_FETCH_MAX absent.
     LIST_QR_FETCH_MAX = int(os.environ.get('LIST_QR_FETCH_MAX') or os.environ.get('LIST_QR_MAX_ROWS') or '3000')
     LIST_QR_PER_PAGE = int(os.environ.get('LIST_QR_PER_PAGE', '15'))

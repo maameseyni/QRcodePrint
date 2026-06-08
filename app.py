@@ -909,27 +909,16 @@ def ticket_header_salle_block(sub_label, gym_name, address, phone, width=None):
     return out
 
 
-def ticket_client_info_lines(
-    client_phone,
-    who,
-    email,
-    client_address,
-    width=None,
-    *,
-    include_client_phone=False,
-):
+def ticket_client_info_lines(client_phone, who, width=None):
     """
-    Bloc client : même principe que l'en-tête salle (colonnes lc / rc, valeurs alignées à droite).
-    Gauche : Nom, [Numéro si demandé], Mail, Adresse.
-    Droite : valeurs alignées à droite (le numéro client n'est pas imprimé sur le ticket par défaut).
+    Bloc client : colonnes lc / rc, valeurs alignées à droite.
+    Gauche : Nom, Tél. ; droite : valeurs (pas d'e-mail ni d'adresse client sur le ticket).
     """
     w = width or ticket_width()
     who = ((who or '').strip() or '-')
     num = ((str(client_phone).strip() if client_phone else '') or '-')
-    email = ((email or '').strip() or '-')
-    addr = ((client_address or '').strip() or '-')
 
-    rights_raw = ([who, num, email, addr] if include_client_phone else [who, email, addr])
+    rights_raw = [who, num]
     rc = max(len(s) for s in rights_raw)
     rc = max(10, min(rc, w - 8))
     lc = w - rc
@@ -952,10 +941,7 @@ def ticket_client_info_lines(
                 left_parts.append(' ' * lc)
 
     append_field('Nom:', who)
-    if include_client_phone:
-        append_field('Numéro:', num)
-    append_field('Mail:', email)
-    append_field('Adresse:', addr)
+    append_field('Tél.:', num)
 
     n = max(len(left_parts), len(right_parts))
     out = []
@@ -1077,16 +1063,7 @@ def build_ticket_preview_parts(rec, expiration_date, owner_user=None, session_di
         before.append('')
 
     who = (g('client_name') + (' ' + g('client_firstname') if g('client_firstname') else '')).strip()
-    before.extend(
-        ticket_client_info_lines(
-            g('client_phone') or '-',
-            who,
-            g('client_email') or '-',
-            g('client_address') or '',
-            w,
-            include_client_phone=False,
-        )
-    )
+    before.extend(ticket_client_info_lines(g('client_phone') or '-', who, w))
 
     before.append('')
 
@@ -1147,8 +1124,6 @@ def print_receipt_escpos(printer, qr_record, expiration_date, owner_user=None):
     firstn = str(qr_record.get('client_firstname') or '').strip()
     who = (client_name + (' ' + firstn if firstn else '')).strip()
     client_phone = str(qr_record.get('client_phone') or '').strip()
-    client_email = str(qr_record.get('client_email') or '').strip()
-    client_address = str(qr_record.get('client_address') or '').strip()
     prest = str(qr_record.get('subscription_type') or 'Prestation').strip()
     prest_line = prest
 
@@ -1162,14 +1137,7 @@ def print_receipt_escpos(printer, qr_record, expiration_date, owner_user=None):
         emit('\n')
     printer.set(align='left', font='a', width=1, height=1)
 
-    for line in ticket_client_info_lines(
-        client_phone or '-',
-        who,
-        client_email or '-',
-        client_address or '',
-        w,
-        include_client_phone=False,
-    ):
+    for line in ticket_client_info_lines(client_phone or '-', who, w):
         emit(line + '\n')
 
     emit('\n')
@@ -1263,13 +1231,24 @@ def _tickets_author_filter_choices(owner_id: str) -> list:
     return out
 
 
-def _fetch_qr_list_rows(filter_type, search, ticket, date_from, date_to, limit, owner_id, author_id=""):
+def _fetch_qr_list_rows(
+    filter_type,
+    search,
+    ticket,
+    date_from,
+    date_to,
+    limit,
+    owner_id,
+    author_id="",
+    payment_mode="",
+):
     oid = str(owner_id or "").strip()
     norm_author = _normalize_tickets_author_id(author_id, oid) if oid else ""
     filters = QueryFilters(
         filter_type=filter_type,
         search=search,
         ticket=ticket,
+        payment_mode=(payment_mode or "").strip().lower(),
         date_from=date_from,
         date_to=date_to,
         limit=limit,
@@ -2149,8 +2128,8 @@ def create_qr():
             client_phone = normalize_sn_mobile_phone(data.get('client_phone', ''))
         except ValueError:
             return jsonify({'success': False, 'error': _SN_PHONE_ERR_MSG}), 400
-        client_email = data.get('client_email', '').strip()
-        client_address = data.get('client_address', '').strip()
+        client_email = ''
+        client_address = ''
         service = data.get('service', '').strip()
         subscription_type = data.get('subscription_type', '').strip()
         payment_mode = (data.get('payment_mode') or '').strip().lower()
@@ -2563,6 +2542,7 @@ def list_qr():
         filter_type = request.args.get('filter', 'all')
         search = (request.args.get('search') or '').strip()
         ticket = (request.args.get('ticket') or '').strip()
+        payment_mode = (request.args.get('payment_mode') or '').strip()
         date_from = (request.args.get('date_from') or '').strip()
         date_to = (request.args.get('date_to') or '').strip()
         author = (request.args.get('author') or '').strip()
@@ -2590,6 +2570,7 @@ def list_qr():
             fetch_max,
             _current_owner_id(),
             author,
+            payment_mode,
         )
         total = len(rows)
         list_now = datetime.now()
@@ -2655,6 +2636,7 @@ def export_qr():
     filter_type = request.args.get('filter', 'all')
     search = (request.args.get('search') or '').strip()
     ticket = (request.args.get('ticket') or '').strip()
+    payment_mode = (request.args.get('payment_mode') or '').strip()
     date_from = (request.args.get('date_from') or '').strip()
     date_to = (request.args.get('date_to') or '').strip()
     author = (request.args.get('author') or '').strip()
@@ -2670,6 +2652,7 @@ def export_qr():
             max_rows,
             _current_owner_id(),
             author,
+            payment_mode,
         )
     except GoogleAPICallError as e:
         return jsonify_firestore_error("export_qr", e)

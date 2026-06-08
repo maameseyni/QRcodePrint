@@ -75,7 +75,7 @@
         <div class="row gx-4 gy-3 gy-lg-0 index-qr-main-row">
             <!-- Colonne gauche : Formulaire -->
             <div class="col-lg-6 d-flex align-items-stretch">
-                <div class="card shadow-lg index-qr-card flex-fill w-100">
+                <div class="card shadow-lg index-qr-card index-qr-form-card flex-fill w-100">
                     <div class="card-header bg-primary text-white">
                         <h3 class="card-title mb-0">
                             <i class="bi bi-pencil-square"></i> Créer un ticket
@@ -84,18 +84,11 @@
                     <div class="card-body">
                         <form id="qrForm">
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-7 mb-4">
                                     <label for="client_name" class="form-label">Prénom et nom <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" id="client_name" required placeholder="Ex: Modou Fall" autocomplete="name">
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="client_email" class="form-label">Email</label>
-                                    <input type="email" class="form-control" id="client_email" placeholder="Ex: modoufall@gmail.com" autocomplete="email">
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-5 mb-4">
                                     <label for="client_phone_local" class="form-label">Téléphone <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text phone-sn-prefix" id="phonePrefixSn" aria-hidden="true">+221</span>
@@ -105,36 +98,32 @@
                                                aria-describedby="phonePrefixSn">
                                     </div>
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="client_address" class="form-label">Adresse <span class="text-muted">(optionnel)</span></label>
-                                    <input type="text" class="form-control" id="client_address" placeholder="Rue, quartier, ville…" autocomplete="street-address">
-                                </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label for="subscription_type" class="form-label">Prestation <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" id="subscription_type" required placeholder="Séance, abonnement mensuel…">
                                 </div>
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label for="service" class="form-label">Détail <span class="text-muted">(optionnel)</span></label>
                                     <input type="text" class="form-control" id="service" placeholder="Précisions, formule, horaire…" autocomplete="off">
                                 </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label for="amount_total" class="form-label">Montant dû <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control" id="amount_total" required min="0" step="0.01" placeholder="0">
                                 </div>
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label for="amount_paid" class="form-label">Montant payé <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control" id="amount_paid" required min="0" step="0.01" placeholder="0">
                                 </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label for="payment_mode_toggle" class="form-label">Mode de paiement <span class="text-danger">*</span></label>
                                     <input type="hidden" id="payment_mode" name="payment_mode" value="">
                                     <div class="dropdown qrp-dropdown w-100">
@@ -152,7 +141,7 @@
                                         </ul>
                                     </div>
                                 </div>
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-4">
                                     <label class="form-label" for="expiration_toggle">Durée d'expiration</label>
                                     <input type="hidden" id="expiration" name="expiration" value="24h">
                                     <div class="dropdown qrp-dropdown w-100">
@@ -177,7 +166,7 @@
                                 </div>
                             </div>
 
-                            <div class="d-grid gap-2 mt-4">
+                            <div class="d-grid gap-2 mt-5">
                                 <button type="submit" class="btn btn-primary btn-lg" id="generateBtn">
                                     <i class="bi bi-magic"></i> Générer le QR Code
                                 </button>

@@ -285,7 +285,7 @@ Variables minimales à définir en production :
 - `ADMIN_USERNAME` : optionnel (défaut: `admin`)
 - `OPERATOR_PASSWORD` : mot de passe du **compte caisse** (créé dans Firestore au démarrage si défini). Ce compte se connecte sur `/login` comme les autres mais **n’a pas accès** à la liste des tickets ni à l’export : uniquement l’accueil (formulaire + impression). Définir aussi `OPERATOR_USERNAME` (défaut `operator`) et, au besoin, `OPERATOR_GYM_NAME`, `OPERATOR_PHONE`, `OPERATOR_ADDRESS` pour le profil minimal stocké en base. **`ADMIN_USERNAME` et `OPERATOR_USERNAME` doivent être différents** (un identifiant = un document utilisateur).
 - Dès que **`ADMIN_PASSWORD` ou `OPERATOR_PASSWORD`** est défini, **toute l’application** exige une connexion. Laisser les deux vides uniquement en développement local si vous acceptez l’accès sans login.
-- `LIST_QR_FETCH_MAX` : plafond de lectures Firestore par chargement de liste. Les filtres **Actif** / **Expiré** utilisent des requêtes indexées (`expiration_ts`). Le filtre **Tous** reste limité aux tickets les plus récents jusqu’à ce plafond (voir commentaires dans `config.py`).
+- `LIST_QR_FETCH_MAX` : plafond de lectures Firestore par chargement de liste. **Une seule requête** (`owner_id` + `created_at` desc) ; les filtres **Actif** / **Expiré** sont appliqués en mémoire sur cette fenêtre (voir `config.py`). Les tickets plus anciens que cette fenêtre n’apparaissent pas.
 - `LIST_QR_RESPONSE_CACHE_SECONDS` : cache des réponses GET `/api/list_qr` ; invalidé après création, suppression, impression, rattachement de QR sans propriétaire, et après le nettoyage des expirés.
 - `SESSION_HOURS` : durée de session en heures (défaut: `12`)
 - `SECRET_KEY` : clé Flask (session/CSRF), longue et aléatoire

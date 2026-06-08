@@ -165,12 +165,26 @@
                         </div>
                     </div>
                     <div class="tickets-filters-field tickets-filters-field--search">
-                        <label for="searchInput" class="form-label" title="Nom, prénom, téléphone, email">Recherche</label>
-                        <input type="text" class="form-control" id="searchInput" placeholder="Nom, prénom, tél., email…" autocomplete="off" spellcheck="false">
+                        <label for="searchInput" class="form-label" title="Nom, prénom, téléphone, email, n° ticket">Recherche</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Nom, prénom, tél., email, n° ticket…" autocomplete="off" spellcheck="false">
                     </div>
-                    <div class="tickets-filters-field tickets-filters-field--ticket">
-                        <label for="ticketInput" class="form-label">N° ticket</label>
-                        <input type="text" class="form-control" id="ticketInput" placeholder="Ex. 000001" inputmode="numeric" autocomplete="off">
+                    <div class="tickets-filters-field tickets-filters-field--payment">
+                        <label for="paymentModeSelect_toggle" class="form-label">Mode de paiement</label>
+                        <input type="hidden" id="paymentModeSelect" value="">
+                        <div class="dropdown qrp-dropdown w-100">
+                            <button class="btn btn-light border dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center qrp-dropdown-toggle"
+                                    type="button" id="paymentModeSelect_toggle" data-bs-toggle="dropdown"
+                                    data-bs-popper-config='{"placement":"bottom-start","modifiers":[{"name":"flip","enabled":false}]}'
+                                    aria-expanded="false">
+                                <span id="paymentModeSelect_label" class="text-truncate">Tous</span>
+                            </button>
+                            <ul class="dropdown-menu w-100 border shadow-sm qrp-dropdown-menu py-1" aria-labelledby="paymentModeSelect_toggle">
+                                <li><button type="button" class="dropdown-item tickets-payment-opt py-2" data-value="" data-label="Tous">Tous</button></li>
+                                <li><button type="button" class="dropdown-item tickets-payment-opt py-2" data-value="especes" data-label="Espèces">Espèces</button></li>
+                                <li><button type="button" class="dropdown-item tickets-payment-opt py-2" data-value="orange_money" data-label="Orange Money">Orange Money</button></li>
+                                <li><button type="button" class="dropdown-item tickets-payment-opt py-2" data-value="wave" data-label="Wave">Wave</button></li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="tickets-filters-field tickets-filters-field--date">
                         <label for="dateFrom" class="form-label">Créé du</label>

@@ -104,6 +104,41 @@ body > .container.index-main-wrap {
     }
 }
 
+/* Carte formulaire accueil : plus de hauteur et d’espace entre les lignes (après retrait de champs) */
+.index-qr-form-card > .card-body {
+    padding: 1.75rem 1.5rem 2.35rem;
+}
+
+.index-qr-form-card {
+    --form-field-padding-y: 0.72rem;
+}
+
+.index-qr-form-card .form-label {
+    margin-bottom: 0.5rem;
+}
+
+@media (min-width: 992px) {
+    .index-qr-main-row > .col-lg-6:first-child .index-qr-form-card {
+        min-height: 500px;
+    }
+
+    .index-qr-form-card > .card-body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .index-qr-form-card #qrForm {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .index-qr-form-card #qrForm > .d-grid {
+        margin-top: auto !important;
+        padding-top: 1.35rem;
+    }
+}
+
 .custom-navbar {
     margin-bottom: 0 !important;
 }
@@ -519,7 +554,7 @@ select.form-select:-webkit-autofill:focus {
     padding-bottom: 0.5rem;
 }
 
-/* Page accueil — zone ticket : hauteur = colonne flex (entre expiration et boutons), pas de plafond qui coupe le scroll */
+/* Page accueil — zone ticket : ne pas s’étirer sur toute la carte ; plafond + défilement interne */
 .ticket-index-scroll-band {
     width: 100%;
     max-width: 100%;
@@ -528,7 +563,7 @@ select.form-select:-webkit-autofill:focus {
     flex: 1 1 auto;
     overflow-x: auto;
     overflow-y: auto;
-    max-height: none;
+    max-height: min(44vh, 380px);
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     touch-action: pan-x pan-y;
@@ -543,6 +578,12 @@ select.form-select:-webkit-autofill:focus {
     width: max-content;
     min-width: 100%;
     max-width: none;
+}
+
+@media (min-width: 992px) {
+    .ticket-index-scroll-band {
+        max-height: min(52vh, 520px);
+    }
 }
 
 @media (max-width: 991.98px) {
@@ -1108,9 +1149,10 @@ select.form-select:-webkit-autofill:focus {
     min-width: min(100%, 14rem);
 }
 
-.tickets-filters-field--ticket {
-    flex: 1 1 11rem;
-    min-width: 10.5rem;
+.tickets-filters-field--payment {
+    flex: 1 1 10.5rem;
+    min-width: 10rem;
+    max-width: 100%;
 }
 
 .tickets-filters-field--date {
@@ -1509,7 +1551,7 @@ html {
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.06),
         0 10px 28px rgba(0, 0, 0, 0.08);
-    max-width: min(56ch, calc(100vw - 2rem));
+    max-width: min(50ch, calc(100vw - 2rem));
     margin-left: auto;
     margin-right: auto;
     --ticket-x-pad: 1.48rem;
@@ -1612,6 +1654,10 @@ html {
     max-width: min(220px, 85%);
     box-shadow: none;
     border-radius: 0;
+}
+
+.ticket-index-scroll-band .ticket-receipt-modern .ticket-preview-qr-img {
+    max-width: min(218px, 88%);
 }
 
 /* ========== Modales aperçu ticket (accueil + liste Tickets) ========== */
@@ -1843,6 +1889,12 @@ html {
     max-height: none;
     overflow-x: visible;
     overflow-y: visible;
+}
+
+/* Carte accueil : ticket plus large dans le box (mise à l’échelle JS) */
+.ticket-index-scroll-band .ticket-scale-stage .ticket-receipt-sheet.ticket-on-qr-box.ticket-receipt-modern {
+    width: 54ch;
+    max-width: 54ch;
 }
 
 /* Annule .ticket-preview-pre { overflow: auto } : sans ça, barres de défilement dans l’aperçu mis à l’échelle */
