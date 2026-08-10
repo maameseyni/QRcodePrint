@@ -486,6 +486,15 @@ def require_gym_owner_session(func):
 def inject_session():
     sa = site_auth_required()
     u = _current_user()
+    brand_primary = str((u or {}).get('brand_primary_color') or '').strip().lower()
+    if not _is_valid_hex_color(brand_primary):
+        brand_primary = BRAND_DEFAULT_PRIMARY_COLOR
+    brand_bg_color = str((u or {}).get('brand_bg_color') or '').strip().lower()
+    if not _is_valid_hex_color(brand_bg_color):
+        brand_bg_color = ''
+    brand_text_color = str((u or {}).get('brand_text_color') or '').strip().lower()
+    if not _is_valid_hex_color(brand_text_color):
+        brand_text_color = ''
     return {
         'current_role': session.get('role'),
         'current_user': session.get('username'),
@@ -499,6 +508,14 @@ def inject_session():
         'profile_incomplete': bool(u and not _profile_complete(u)),
         'can_manage_settings': str(session.get('role') or '').strip().lower() not in ('operator', 'cashier'),
         'tickets_can_export': _user_can_export_tickets(u) if u else True,
+        'brand_primary_color': brand_primary,
+        'brand_primary_color_dark': _darken_hex(brand_primary, 0.82),
+        'brand_primary_color_darker': _darken_hex(brand_primary, 0.62),
+        'brand_primary_color_rgb': _hex_to_rgb_triplet(brand_primary),
+        'brand_logo_url': str((u or {}).get('brand_logo_data_uri') or '').strip(),
+        'brand_bg_color': brand_bg_color,
+        'brand_bg_gradient': _page_background_gradient(brand_bg_color) if brand_bg_color else '',
+        'brand_text_color': brand_text_color,
     }
 
 def _warn_operator_admin_username_collision():
@@ -690,6 +707,89 @@ def _probe_printer_status():
 
 
 PAYMENT_MODES = frozenset({'especes', 'orange_money', 'wave'})
+
+# Personnalisation (couleur + logo) : valeur par défaut = couleur historique de l'app.
+BRAND_DEFAULT_PRIMARY_COLOR = '#1a2745'
+BRAND_LOGO_MAX_DIM = 320
+BRAND_LOGO_MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+_HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+
+
+def _is_valid_hex_color(value) -> bool:
+    return bool(_HEX_COLOR_RE.match((value or '').strip()))
+
+
+def _darken_hex(hex_color: str, factor: float) -> str:
+    """Assombrit une couleur hex pour les dégradés/hover (facteur 1 = inchangé, 0 = noir)."""
+    h = (hex_color or '').lstrip('#')
+    try:
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return hex_color
+    r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
+def _lighten_hex(hex_color: str, whiteness: float) -> str:
+    """Éclaircit une couleur hex en la mélangeant avec du blanc (whiteness 0-1 : 1 = blanc pur).
+
+    Utilisé pour le fond de page : quelle que soit la couleur choisie par l'utilisateur,
+    le résultat reste un pastel clair (cartes blanches + texte sombre toujours lisibles dessus).
+    """
+    h = (hex_color or '').lstrip('#')
+    try:
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return hex_color
+    w = max(0.0, min(1.0, whiteness))
+    r, g, b = (max(0, min(255, int(c + (255 - c) * w))) for c in (r, g, b))
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
+def _page_background_gradient(hex_color: str) -> str:
+    """Dégradé de fond de page : léger relief autour de la couleur choisie (respectée telle quelle,
+    contrairement à l'ancienne version qui forçait un pastel clair — liberté totale, comme les autres couleurs)."""
+    stop1 = _lighten_hex(hex_color, 0.22)
+    stop2 = hex_color
+    stop3 = _darken_hex(hex_color, 0.9)
+    return (
+        f'radial-gradient(1200px 600px at 15% 10%, {stop1} 0%, {stop2} 55%, {stop3} 100%)'
+    )
+
+
+def _hex_to_rgb_triplet(hex_color: str) -> str:
+    """"r, g, b" (pour rgba(var(--brand-primary-rgb), alpha) : survols/focus teintés à la couleur choisie)."""
+    h = (hex_color or '').lstrip('#')
+    try:
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return '26, 39, 69'
+    return f'{r}, {g}, {b}'
+
+
+def _process_logo_upload(file_storage):
+    """Valide un logo uploadé et le renvoie en data URI PNG (redimensionné, taille bornée)."""
+    raw = file_storage.read()
+    if not raw:
+        raise ValueError('Fichier vide.')
+    if len(raw) > BRAND_LOGO_MAX_UPLOAD_BYTES:
+        raise ValueError('Le fichier est trop volumineux (5 Mo maximum).')
+    try:
+        img = Image.open(BytesIO(raw))
+        img.load()
+    except Exception:
+        raise ValueError('Fichier image invalide (PNG, JPG ou WEBP attendu).')
+    img = img.convert('RGBA')
+    w, h = img.size
+    if w <= 0 or h <= 0:
+        raise ValueError('Image invalide.')
+    scale = min(1.0, BRAND_LOGO_MAX_DIM / max(w, h))
+    if scale < 1.0:
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+    buf = BytesIO()
+    img.save(buf, format='PNG', optimize=True)
+    encoded = base64.b64encode(buf.getvalue()).decode()
+    return f'data:image/png;base64,{encoded}'
 
 
 def payment_mode_label(code: str) -> str:
@@ -1964,6 +2064,60 @@ def settings():
                 cur_exp = bool(target.get('allow_export', True))
                 store.update_user(cid, {'allow_export': not cur_exp})
                 return redirect(url_for('settings', cashier_export_updated='1'))
+
+        elif action == 'update_branding':
+            color = (request.form.get('primary_color') or '').strip()
+            bg_color = (request.form.get('bg_color') or '').strip()
+            text_color = (request.form.get('text_color') or '').strip()
+            remove_logo = (request.form.get('remove_logo') or '').strip() == '1'
+            updates = {}
+            if color:
+                if not _is_valid_hex_color(color):
+                    error = 'Couleur invalide.'
+                else:
+                    updates['brand_primary_color'] = color.lower()
+            if not error and bg_color:
+                if not _is_valid_hex_color(bg_color):
+                    error = 'Couleur de fond invalide.'
+                else:
+                    updates['brand_bg_color'] = bg_color.lower()
+            if not error and text_color:
+                if not _is_valid_hex_color(text_color):
+                    error = 'Couleur de texte invalide.'
+                else:
+                    updates['brand_text_color'] = text_color.lower()
+            logo_file = request.files.get('logo_file')
+            if not error and logo_file and logo_file.filename:
+                try:
+                    updates['brand_logo_data_uri'] = _process_logo_upload(logo_file)
+                except ValueError as e:
+                    error = str(e)
+            elif not error and remove_logo:
+                updates['brand_logo_data_uri'] = ''
+            if not error:
+                if updates:
+                    store.update_user(user['id'], updates)
+                    if hasattr(g, '_qrprint_user'):
+                        g.pop('_qrprint_user', None)
+                return redirect(url_for('settings', branding_updated='1'))
+
+        elif action == 'reset_branding':
+            store.update_user(user['id'], {'brand_primary_color': ''})
+            if hasattr(g, '_qrprint_user'):
+                g.pop('_qrprint_user', None)
+            return redirect(url_for('settings', branding_reset='1'))
+
+        elif action == 'reset_bg_color':
+            store.update_user(user['id'], {'brand_bg_color': ''})
+            if hasattr(g, '_qrprint_user'):
+                g.pop('_qrprint_user', None)
+            return redirect(url_for('settings', bg_reset='1'))
+
+        elif action == 'reset_text_color':
+            store.update_user(user['id'], {'brand_text_color': ''})
+            if hasattr(g, '_qrprint_user'):
+                g.pop('_qrprint_user', None)
+            return redirect(url_for('settings', text_reset='1'))
 
         else:
             username = str(user.get('username') or '').strip().lower()[:64]

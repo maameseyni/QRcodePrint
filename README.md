@@ -8,6 +8,7 @@ Application web complète pour générer et imprimer des QR Codes via une imprim
 - ✅ Impression thermique directe sur imprimante POS USB ou réseau
 - ✅ Gestion d'expiration (24h, 7j, 30j, ou personnalisé)
 - ✅ Dashboard administrateur pour gérer tous les QR Codes
+- ✅ Personnalisation de l'apparence par structure (couleur principale + logo, page Paramètres)
 - ✅ Interface moderne et intuitive avec Bootstrap 5
 - ✅ Base de données SQLite pour stockage local
 - ✅ APIs REST complètes

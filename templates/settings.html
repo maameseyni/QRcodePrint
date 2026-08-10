@@ -8,12 +8,27 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        :root {
+            --brand-primary: {{ brand_primary_color }};
+            --brand-primary-dark: {{ brand_primary_color_dark }};
+            --brand-primary-darker: {{ brand_primary_color_darker }};
+            --brand-primary-rgb: {{ brand_primary_color_rgb }};
+            {% if brand_bg_gradient %}--app-page-background: {{ brand_bg_gradient }};{% endif %}
+            {% if brand_text_color %}--app-text-color: {{ brand_text_color }};{% endif %}
+        }
+    </style>
 </head>
 <body class="page-settings">
     <nav class="navbar navbar-expand-lg navbar-light bg-white custom-navbar">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+                {% if brand_logo_url %}
+                <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
+                {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
+                {% else %}
                 <i class="bi bi-qr-code-scan"></i> QR Code Print
+                {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavSettings">
                 <span class="navbar-toggler-icon"></span>
@@ -21,22 +36,22 @@
             <div class="collapse navbar-collapse" id="navbarNavSettings">
                 <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">Accueil</a>
+                        <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house-door nav-link-icon" aria-hidden="true"></i>Accueil</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('tickets') }}">Tickets</a>
+                        <a class="nav-link" href="{{ url_for('tickets') }}"><i class="bi bi-receipt nav-link-icon" aria-hidden="true"></i>Tickets</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2 nav-link-icon" aria-hidden="true"></i>Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="{{ url_for('settings') }}" aria-current="page">Paramètres</a>
+                        <a class="nav-link active" href="{{ url_for('settings') }}" aria-current="page"><i class="bi bi-gear nav-link-icon" aria-hidden="true"></i>Paramètres</a>
                     </li>
                     {% if current_role %}
                     <li class="nav-item">
                         <form method="post" action="{{ url_for('logout') }}" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-link nav-link py-0">Déconnexion ({{ current_gym_name or current_full_name or current_user or current_role }})</button>
+                            <button type="submit" class="btn btn-link nav-link py-0"><i class="bi bi-box-arrow-right nav-link-icon" aria-hidden="true"></i>Déconnexion ({{ current_gym_name or current_full_name or current_user or current_role }})</button>
                         </form>
                     </li>
                     {% endif %}
@@ -101,6 +116,26 @@
         {% if request.args.get('updated') %}
         <div class="alert alert-success py-2 small mb-4" role="alert">
             <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Modifications enregistrées.
+        </div>
+        {% endif %}
+        {% if request.args.get('branding_updated') %}
+        <div class="alert alert-success py-2 small mb-4" role="alert">
+            <i class="bi bi-palette me-1" aria-hidden="true"></i>Apparence mise à jour.
+        </div>
+        {% endif %}
+        {% if request.args.get('branding_reset') %}
+        <div class="alert alert-success py-2 small mb-4" role="alert">
+            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Couleur réinitialisée.
+        </div>
+        {% endif %}
+        {% if request.args.get('bg_reset') %}
+        <div class="alert alert-success py-2 small mb-4" role="alert">
+            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Fond de page réinitialisé.
+        </div>
+        {% endif %}
+        {% if request.args.get('text_reset') %}
+        <div class="alert alert-success py-2 small mb-4" role="alert">
+            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Couleur du texte réinitialisée.
         </div>
         {% endif %}
         {% if error %}
@@ -200,6 +235,123 @@
                         <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Retour à l’accueil</a>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <div class="card shadow-lg index-qr-card settings-branding-card mt-4">
+            <div class="card-header bg-primary text-white">
+                <h2 class="card-title h5 mb-0"><i class="bi bi-palette me-2" aria-hidden="true"></i>Personnalisation</h2>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted small mb-4">Votre logo et votre couleur s’affichent dans toute l’application (menu, boutons, en-têtes) dès que vous êtes connecté.</p>
+                <form method="post" action="{{ url_for('settings') }}" enctype="multipart/form-data" id="brandingForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="update_branding">
+                    <input type="hidden" name="remove_logo" id="brandingRemoveLogo" value="0">
+
+                    <div class="row g-4 align-items-start">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label d-block">Couleur principale</label>
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <input type="color" class="form-control form-control-color brand-color-input" id="brand_primary_color" name="primary_color" value="{{ brand_primary_color }}" title="Choisir une couleur">
+                                <input type="text" class="form-control brand-color-hex" id="brand_primary_color_hex" value="{{ brand_primary_color }}" maxlength="7" autocomplete="off" spellcheck="false" aria-label="Code couleur hexadécimal">
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 brand-color-presets" role="group" aria-label="Couleurs prédéfinies">
+                                {% for preset in ['#1a2745', '#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#212529'] %}
+                                <button type="button" class="brand-color-swatch" style="background-color: {{ preset }};" data-color="{{ preset }}" title="{{ preset }}" aria-label="Choisir la couleur {{ preset }}"></button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label d-block">Logo</label>
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="brand-logo-preview-box" id="brandLogoPreviewBox">
+                                    {% if brand_logo_url %}
+                                    <img src="{{ brand_logo_url }}" alt="Logo actuel">
+                                    {% else %}
+                                    <i class="bi bi-image text-muted" aria-hidden="true"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <input type="file" class="form-control form-control-sm" id="brand_logo_file" name="logo_file" accept="image/png,image/jpeg,image/webp">
+                                    <p class="form-text small text-muted mb-0">PNG, JPG ou WEBP, redimensionné automatiquement.</p>
+                                </div>
+                            </div>
+                            {% if brand_logo_url %}
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="brandLogoRemoveBtn">
+                                <i class="bi bi-trash me-1" aria-hidden="true"></i>Supprimer le logo
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-4 align-items-start mt-1">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label d-block">Fond de page</label>
+                            <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                                <input type="color" class="form-control form-control-color brand-color-input" id="brand_bg_color" name="bg_color" value="{{ brand_bg_color or '#c9d3e0' }}" title="Choisir une couleur de fond">
+                                <input type="text" class="form-control brand-color-hex" id="brand_bg_color_hex" value="{{ brand_bg_color }}" maxlength="7" autocomplete="off" spellcheck="false" placeholder="Par défaut" aria-label="Code couleur hexadécimal du fond">
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 brand-color-presets" role="group" aria-label="Couleurs de fond prédéfinies">
+                                {% for preset in ['#f5f8ff', '#1a2745', '#0d1b2a', '#2d0b3a', '#c9d3e0', '#0b3d2e'] %}
+                                <button type="button" class="brand-color-swatch brand-bg-swatch" style="background-color: {{ preset }};" data-color="{{ preset }}" title="{{ preset }}" aria-label="Choisir le fond {{ preset }}"></button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label d-block">Couleur du texte</label>
+                            <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                                <input type="color" class="form-control form-control-color brand-color-input" id="brand_text_color" name="text_color" value="{{ brand_text_color or '#212529' }}" title="Choisir une couleur de texte">
+                                <input type="text" class="form-control brand-color-hex" id="brand_text_color_hex" value="{{ brand_text_color }}" maxlength="7" autocomplete="off" spellcheck="false" placeholder="Par défaut" aria-label="Code couleur hexadécimal du texte">
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 brand-color-presets" role="group" aria-label="Couleurs de texte prédéfinies">
+                                {% for preset in ['#212529', '#1a2745', '#3a3a3a', '#ffffff', '#e5e7eb', '#4b3621'] %}
+                                <button type="button" class="brand-color-swatch brand-text-swatch" style="background-color: {{ preset }};" data-color="{{ preset }}" title="{{ preset }}" aria-label="Choisir le texte {{ preset }}"></button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <p class="text-muted small mb-0">Vous choisissez librement le fond et le texte, exactement comme pour la couleur principale. Les cadres (cartes) restent blancs. L'aperçu ci-dessous se met à jour en direct : vérifiez que le texte reste lisible avant d'enregistrer.</p>
+                        </div>
+                    </div>
+
+                    <div class="brand-live-preview mt-4" id="brandLivePreview">
+                        <div class="brand-live-preview__card" id="brandLivePreviewCard">
+                            <p class="brand-live-preview__eyebrow" id="brandLivePreviewEyebrow">Aperçu</p>
+                            <p class="brand-live-preview__text" id="brandLivePreviewText">Voici à quoi ressembleront vos pages : ce texte et ce fond.</p>
+                            <button type="button" class="btn brand-preview-btn" id="brandPreviewBtn">Bouton principal</button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mt-4 pt-3 border-top border-light-subtle">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Enregistrer l’apparence
+                        </button>
+                    </div>
+                </form>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    <form method="post" action="{{ url_for('settings') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="reset_branding">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Réinitialiser la couleur
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('settings') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="reset_bg_color">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Réinitialiser le fond
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('settings') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="reset_text_color">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Réinitialiser le texte
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -418,7 +570,11 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- GSAP (animations) -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/nav-enhance.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/page-enter.js') }}"></script>
     <script>
     (function () {
         function toastErr(msg) {
@@ -525,6 +681,138 @@
                 var nm = document.getElementById('cashierDeactivateConfirmName');
                 if (hid) hid.value = id;
                 if (nm) nm.textContent = name;
+            });
+        }
+    })();
+    </script>
+    <script>
+    (function () {
+        var fileInput = document.getElementById('brand_logo_file');
+        var previewBox = document.getElementById('brandLogoPreviewBox');
+        var removeBtn = document.getElementById('brandLogoRemoveBtn');
+        var removeFlag = document.getElementById('brandingRemoveLogo');
+
+        var previewBtn = document.getElementById('brandPreviewBtn');
+        var previewRoot = document.getElementById('brandLivePreview');
+        var previewEyebrow = document.getElementById('brandLivePreviewEyebrow');
+        var previewText = document.getElementById('brandLivePreviewText');
+
+        function isValidHex(v) {
+            return /^#[0-9a-fA-F]{6}$/.test(v);
+        }
+
+        // Même mélange que _lighten_hex / _darken_hex côté serveur.
+        function mixHex(hex, target, amount) {
+            var h = hex.replace('#', '');
+            var r = parseInt(h.substring(0, 2), 16);
+            var g = parseInt(h.substring(2, 4), 16);
+            var b = parseInt(h.substring(4, 6), 16);
+            r = Math.round(r + (target - r) * amount);
+            g = Math.round(g + (target - g) * amount);
+            b = Math.round(b + (target - b) * amount);
+            return 'rgb(' + r + ',' + g + ',' + b + ')';
+        }
+        function lightenHex(hex, amount) { return mixHex(hex, 255, amount); }
+        function darkenHexRgb(hex, amount) { return mixHex(hex, 0, 1 - amount); }
+
+        function pageGradient(hex) {
+            return 'radial-gradient(circle at 15% 10%, ' + lightenHex(hex, 0.22) + ' 0%, ' + hex + ' 55%, ' + darkenHexRgb(hex, 0.9) + ' 100%)';
+        }
+
+        // Un seul sélecteur (couleur + hex + pastilles) relié à un input caché, avec callback de rendu.
+        function wireColorField(colorId, hexId, swatchClass, onChange) {
+            var colorInput = document.getElementById(colorId);
+            var hexInput = document.getElementById(hexId);
+            var swatches = document.querySelectorAll('.' + swatchClass);
+
+            function apply(hex) {
+                if (colorInput) colorInput.value = hex;
+                if (hexInput) hexInput.value = hex;
+                onChange(hex);
+            }
+
+            if (colorInput) {
+                colorInput.addEventListener('input', function () {
+                    if (hexInput) hexInput.value = colorInput.value;
+                    onChange(colorInput.value);
+                });
+            }
+            if (hexInput) {
+                hexInput.addEventListener('input', function () {
+                    var v = hexInput.value.trim();
+                    if (v && v[0] !== '#') v = '#' + v;
+                    if (isValidHex(v)) {
+                        if (colorInput) colorInput.value = v;
+                        onChange(v);
+                    }
+                });
+            }
+            swatches.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var c = btn.getAttribute('data-color');
+                    if (c) apply(c);
+                });
+            });
+
+            return colorInput ? colorInput.value : '';
+        }
+
+        wireColorField('brand_primary_color', 'brand_primary_color_hex', 'brand-color-swatch', function (hex) {
+            if (previewBtn) {
+                previewBtn.style.backgroundColor = hex;
+                previewBtn.style.borderColor = hex;
+            }
+        });
+
+        wireColorField('brand_bg_color', 'brand_bg_color_hex', 'brand-bg-swatch', function (hex) {
+            if (previewRoot && isValidHex(hex)) previewRoot.style.background = pageGradient(hex);
+        });
+
+        wireColorField('brand_text_color', 'brand_text_color_hex', 'brand-text-swatch', function (hex) {
+            if (!isValidHex(hex)) return;
+            if (previewEyebrow) previewEyebrow.style.color = hex;
+            if (previewText) previewText.style.color = hex;
+        });
+
+        // État initial de l'aperçu combiné (au chargement, avec les valeurs déjà en base).
+        (function initPreview() {
+            var pc = document.getElementById('brand_primary_color');
+            var bc = document.getElementById('brand_bg_color');
+            var tc = document.getElementById('brand_text_color');
+            if (pc && previewBtn) {
+                previewBtn.style.backgroundColor = pc.value;
+                previewBtn.style.borderColor = pc.value;
+            }
+            if (bc && previewRoot) previewRoot.style.background = pageGradient(bc.value);
+            if (tc && isValidHex(tc.value)) {
+                if (previewEyebrow) previewEyebrow.style.color = tc.value;
+                if (previewText) previewText.style.color = tc.value;
+            }
+        })();
+
+        if (fileInput) {
+            fileInput.addEventListener('change', function () {
+                var f = fileInput.files && fileInput.files[0];
+                if (!f) return;
+                if (removeFlag) removeFlag.value = '0';
+                var reader = new FileReader();
+                reader.onload = function (ev) {
+                    if (previewBox) {
+                        previewBox.innerHTML = '<img src="' + ev.target.result + '" alt="Aperçu du logo">';
+                    }
+                };
+                reader.readAsDataURL(f);
+            });
+        }
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function () {
+                if (removeFlag) removeFlag.value = '1';
+                if (fileInput) fileInput.value = '';
+                if (previewBox) {
+                    previewBox.innerHTML = '<i class="bi bi-image text-muted" aria-hidden="true"></i>';
+                }
+                removeBtn.disabled = true;
+                removeBtn.classList.add('opacity-50');
             });
         }
     })();
