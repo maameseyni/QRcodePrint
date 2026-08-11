@@ -2225,10 +2225,54 @@ def logout():
 
 
 @app.route('/')
-@require_operator_or_admin_session
 def index():
-    """Page d'accueil (création QR) après connexion."""
-    return render_template('index.html')
+    """Page d'accueil : landing publique (visiteur) ou création QR (connecté)."""
+    if not site_auth_required():
+        return render_template('index.html')
+    if _is_authenticated():
+        u = _current_user()
+        if not _profile_complete(u):
+            return redirect(url_for('complete_profile'))
+        return render_template('index.html')
+    return render_template('landing.html')
+
+
+@app.route('/contact', methods=['POST'])
+def contact_submit():
+    """Formulaire de contact (landing page, public)."""
+    name = ' '.join((request.form.get('name') or '').split()).strip()[:120]
+    email = (request.form.get('email') or '').strip().lower()[:180]
+    phone = ' '.join((request.form.get('phone') or '').split()).strip()[:40]
+    subject = ' '.join((request.form.get('subject') or '').split()).strip()[:160]
+    message = (request.form.get('message') or '').strip()[:4000]
+
+    error = None
+    if not name:
+        error = 'Veuillez indiquer votre nom.'
+    elif not email or '@' not in email or len(email) < 5:
+        error = 'Adresse email invalide.'
+    elif not message:
+        error = 'Veuillez saisir un message.'
+
+    if error:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': error}), 400
+        return redirect(url_for('index', contact_error='1') + '#contact')
+
+    try:
+        store.create_contact_message({
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'subject': subject,
+            'message': message,
+        })
+    except GoogleAPICallError as e:
+        return jsonify_firestore_error('create_contact_message', e)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
+    return redirect(url_for('index', contact_sent='1') + '#contact')
 
 
 @app.route('/tickets')

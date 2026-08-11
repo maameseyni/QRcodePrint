@@ -471,6 +471,17 @@ class FirestoreDataStore:
             out.append(row)
         return out
 
+    # ---------- Contact (landing page) ----------
+
+    def create_contact_message(self, record: Dict[str, Any]) -> str:
+        """Message envoyé depuis le formulaire de contact de la landing page."""
+        data = dict(record)
+        data.setdefault("created_at", datetime.utcnow().isoformat())
+        data.setdefault("status", "new")
+        doc_ref = self._col("contact_messages").document()
+        doc_ref.set(data)
+        return doc_ref.id
+
     def cleanup_expired_qr(self) -> int:
         """Désactive les QR dont expiration_ts est dépassé (champ requis pour la requête)."""
         now_ts = _now_ts()

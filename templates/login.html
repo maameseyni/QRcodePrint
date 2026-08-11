@@ -8,8 +8,39 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+    <style>
+        :root {
+            --brand-primary: {{ brand_primary_color }};
+            --brand-primary-dark: {{ brand_primary_color_dark }};
+            --brand-primary-darker: {{ brand_primary_color_darker }};
+            --brand-primary-rgb: {{ brand_primary_color_rgb }};
+        }
+    </style>
 </head>
 <body class="login-page">
+    <nav class="landing-nav">
+        <div class="landing-nav-inner">
+            <a class="landing-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-qr-code-scan"></i> QR Code Print
+            </a>
+            <ul class="landing-nav-links" id="landingNavLinks">
+                <li><a href="{{ url_for('index') }}#fonctionnalites">Fonctionnalités</a></li>
+                <li><a href="{{ url_for('index') }}#tarifs">Tarifs</a></li>
+                <li><a href="{{ url_for('index') }}#contact">Contact</a></li>
+                <li><a href="{{ url_for('index') }}#faq">FAQ</a></li>
+            </ul>
+            <div class="landing-nav-cta">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                    <span class="landing-nav-cta-label">Accueil</span>
+                    <i class="bi bi-house ms-1" aria-hidden="true"></i>
+                </a>
+                <button type="button" class="landing-nav-toggle" id="landingNavToggle" aria-label="Ouvrir le menu" aria-expanded="false">
+                    <i class="bi bi-list" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
     <main class="login-page-shell">
         <section class="neumo-card">
             <div class="neumo-avatar">
@@ -177,6 +208,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
     <script src="{{ url_for('static', filename='js/page-enter.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
     <script>
         document.querySelectorAll('.neumo-eye-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {

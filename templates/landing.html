@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="description" content="QR Code Print — Générez des QR codes sécurisés et imprimez des reçus thermiques à l'image de votre salle. Dashboard, multi-caissiers, personnalisation complète.">
+    <title>QR Code Print — Tickets & QR codes pour salles de sport</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+    <style>
+        :root {
+            --brand-primary: {{ brand_primary_color }};
+            --brand-primary-dark: {{ brand_primary_color_dark }};
+            --brand-primary-darker: {{ brand_primary_color_darker }};
+            --brand-primary-rgb: {{ brand_primary_color_rgb }};
+        }
+    </style>
+</head>
+<body class="landing-page">
+
+    <nav class="landing-nav">
+        <div class="landing-nav-inner">
+            <a class="landing-brand" href="#top">
+                <i class="bi bi-qr-code-scan"></i> QR Code Print
+            </a>
+            <ul class="landing-nav-links" id="landingNavLinks">
+                <li><a href="#fonctionnalites">Fonctionnalités</a></li>
+                <li><a href="#tarifs">Tarifs</a></li>
+                <li><a href="#contact">Contact</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ul>
+            <div class="landing-nav-cta">
+                <a href="{{ url_for('login') }}" class="btn btn-primary">
+                    <span class="landing-nav-cta-label">Connexion</span>
+                    <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+                </a>
+                <button type="button" class="landing-nav-toggle" id="landingNavToggle" aria-label="Ouvrir le menu" aria-expanded="false">
+                    <i class="bi bi-list" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="top"></div>
+
+    <!-- ================= HERO ================= -->
+    <header class="landing-hero">
+        <div class="container">
+            <div class="row align-items-center gy-5">
+                <div class="col-lg-6" id="landingHeroText">
+                    <span class="landing-eyebrow"><i class="bi bi-stars"></i> Fait pour les salles de sport</span>
+                    <h1>Vos tickets, <span class="accent">votre marque</span>, en un scan.</h1>
+                    <p class="landing-hero-sub">
+                        Générez des QR codes signés cryptographiquement, imprimez des reçus thermiques
+                        personnalisés à votre image, et suivez vos recettes en temps réel — tout depuis
+                        une seule application.
+                    </p>
+                    <div class="landing-hero-cta">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg landing-hero-cta-primary">
+                            <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>Se connecter
+                        </a>
+                        <a href="#fonctionnalites" class="landing-hero-cta-secondary">
+                            Découvrir les fonctionnalités
+                            <i class="bi bi-arrow-down-short" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                    <div class="landing-hero-trust">
+                        <span>Sécu HMAC</span>
+                        <span class="landing-hero-trust-dot" aria-hidden="true"></span>
+                        <span>Thermique</span>
+                        <span class="landing-hero-trust-dot" aria-hidden="true"></span>
+                        <span>Multi-caissiers</span>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="landing-hero-visual" id="landingHeroVisual">
+                        <div class="landing-ticket-glow" aria-hidden="true"></div>
+                        <div class="landing-ticket-mock">
+                            <img
+                                src="{{ url_for('static', filename='images/ticket.png') }}?v=7"
+                                alt="Exemple de reçu de paiement avec QR code"
+                                class="landing-ticket-mock__img"
+                                width="724"
+                                height="1024"
+                                decoding="async"
+                                fetchpriority="high"
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================= FONCTIONNALITÉS ================= -->
+    <section id="fonctionnalites" class="landing-section">
+        <div class="container">
+            <div class="landing-section-head" id="landingFeaturesHead">
+                <span class="landing-section-eyebrow">Fonctionnalités</span>
+                <h2>Tout ce qu'il faut pour gérer votre salle</h2>
+                <p>De la création du ticket à l'encaissement, chaque étape est pensée pour aller vite au comptoir.</p>
+            </div>
+            <div class="row g-4" id="landingFeaturesGrid">
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-qr-code" aria-hidden="true"></i></div>
+                        <h3>QR codes sécurisés</h3>
+                        <p>Chaque ticket est signé cryptographiquement (HMAC) : impossible à falsifier, avec expiration automatique.</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-printer" aria-hidden="true"></i></div>
+                        <h3>Impression thermique</h3>
+                        <p>Compatible USB ou réseau, format 80&nbsp;mm : le reçu et son QR s'impriment en un clic depuis le comptoir.</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-speedometer2" aria-hidden="true"></i></div>
+                        <h3>Dashboard financier</h3>
+                        <p>Recettes du jour, du mois, reste à encaisser, répartition par mode de paiement — en un coup d'œil.</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-people" aria-hidden="true"></i></div>
+                        <h3>Multi-comptes</h3>
+                        <p>Ajoutez des comptes caissiers avec des droits limités, sans jamais partager votre mot de passe principal.</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-palette" aria-hidden="true"></i></div>
+                        <h3>Personnalisation complète</h3>
+                        <p>Logo, couleurs, fond de page : l'application prend l'identité visuelle de votre salle, pas l'inverse.</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-feature-card">
+                        <div class="landing-feature-icon"><i class="bi bi-search" aria-hidden="true"></i></div>
+                        <h3>Recherche & export</h3>
+                        <p>Filtrez vos tickets par statut, auteur, mode de paiement ou date, et exportez en CSV ou Excel.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= TARIFS ================= -->
+    <section id="tarifs" class="landing-section landing-section-alt">
+        <div class="container">
+            <div class="landing-section-head" id="landingPricingHead">
+                <span class="landing-section-eyebrow">Tarifs</span>
+                <h2>Une offre adaptée à chaque salle</h2>
+                <p>Grille tarifaire en cours de finalisation — contactez-nous pour être informé dès son ouverture.</p>
+            </div>
+            <div class="row g-4 justify-content-center" id="landingPricingGrid">
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-price-card">
+                        <p class="landing-price-name">Essentiel</p>
+                        <p class="landing-price-desc">Pour démarrer avec une seule caisse.</p>
+                        <div class="landing-price-amount">
+                            <span class="value">Bientôt</span>
+                        </div>
+                        <ul class="landing-price-list">
+                            <li><i class="bi bi-check-circle-fill"></i> Création & impression de QR codes</li>
+                            <li><i class="bi bi-check-circle-fill"></i> 1 compte caisse</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Liste des tickets & export</li>
+                        </ul>
+                        <a href="#contact" class="btn btn-outline-primary w-100">Être informé</a>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-price-card landing-price-card--featured">
+                        <span class="landing-price-badge">Le plus populaire</span>
+                        <p class="landing-price-name">Pro</p>
+                        <p class="landing-price-desc">Pour les salles avec plusieurs caissiers.</p>
+                        <div class="landing-price-amount">
+                            <span class="value">Bientôt</span>
+                        </div>
+                        <ul class="landing-price-list">
+                            <li><i class="bi bi-check-circle-fill"></i> Tout Essentiel, plus :</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Caissiers illimités</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Dashboard financier complet</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Personnalisation (logo, couleurs)</li>
+                        </ul>
+                        <a href="#contact" class="btn btn-primary w-100">Être informé</a>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="landing-price-card">
+                        <p class="landing-price-name">Sur mesure</p>
+                        <p class="landing-price-desc">Pour les réseaux de plusieurs salles.</p>
+                        <div class="landing-price-amount">
+                            <span class="value">Sur devis</span>
+                        </div>
+                        <ul class="landing-price-list">
+                            <li><i class="bi bi-check-circle-fill"></i> Tout Pro, plus :</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Multi-établissements</li>
+                            <li><i class="bi bi-check-circle-fill"></i> Accompagnement dédié</li>
+                        </ul>
+                        <a href="#contact" class="btn btn-outline-primary w-100">Nous contacter</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= FAQ ================= -->
+    <section id="faq" class="landing-section">
+        <div class="container">
+            <div class="landing-section-head" id="landingFaqHead">
+                <span class="landing-section-eyebrow">FAQ</span>
+                <h2>Questions fréquentes</h2>
+            </div>
+            <div class="landing-faq accordion mx-auto" id="landingFaqAccordion" style="max-width: 42rem;">
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                            Ai-je besoin d'une imprimante spécifique ?
+                        </button>
+                    </h3>
+                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#landingFaqAccordion">
+                        <div class="accordion-body">
+                            Non : l'application est compatible avec toute imprimante thermique ESC/POS (80&nbsp;mm), en USB ou en réseau — Epson, Star, Bixolon, Zjiang, etc.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                            Puis-je personnaliser l'apparence de mes tickets et de l'application ?
+                        </button>
+                    </h3>
+                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#landingFaqAccordion">
+                        <div class="accordion-body">
+                            Oui : logo, couleur principale, fond de page et couleur des titres se règlent depuis les Paramètres, avec un aperçu en direct avant d'enregistrer.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                            Combien de comptes caissiers puis-je ajouter ?
+                        </button>
+                    </h3>
+                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#landingFaqAccordion">
+                        <div class="accordion-body">
+                            Autant que nécessaire. Chaque caissier a son propre identifiant et mot de passe, sans accès à vos réglages ni à votre mot de passe principal.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                            Mes données sont-elles sécurisées ?
+                        </button>
+                    </h3>
+                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#landingFaqAccordion">
+                        <div class="accordion-body">
+                            Oui : les QR codes sont signés cryptographiquement (HMAC), les mots de passe sont hachés, et les données sont hébergées sur Google Firestore.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                            Puis-je essayer avant de m'engager ?
+                        </button>
+                    </h3>
+                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#landingFaqAccordion">
+                        <div class="accordion-body">
+                            La grille tarifaire est en cours de finalisation. Laissez-nous vos coordonnées via le formulaire de contact pour être informé dès l'ouverture.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= CONTACT ================= -->
+    <section id="contact" class="landing-section landing-section-alt landing-contact-section">
+        <div class="container">
+            <div class="landing-section-head" id="landingContactHead">
+                <span class="landing-section-eyebrow">Contact</span>
+                <h2>Une question ? Parlons-en</h2>
+                <p>Laissez-nous un message, nous vous répondrons rapidement.</p>
+            </div>
+
+            <div class="row g-4 align-items-stretch landing-contact-grid" id="landingContactCard">
+                <div class="col-lg-5">
+                    <div class="landing-contact-info">
+                        <a class="landing-contact-channel landing-contact-channel--wa" href="https://wa.me/221771004908" target="_blank" rel="noopener noreferrer">
+                            <span class="landing-contact-channel__icon" aria-hidden="true"><i class="bi bi-whatsapp"></i></span>
+                            <div class="landing-contact-channel__body">
+                                <div class="landing-contact-channel__label">WhatsApp</div>
+                                <div class="landing-contact-channel__value">+221 77 100 49 08</div>
+                                <div class="landing-contact-channel__hint">On vous répond vite</div>
+                            </div>
+                            <span class="landing-contact-channel__arrow" aria-hidden="true"><i class="bi bi-arrow-up-right"></i></span>
+                        </a>
+                        <a class="landing-contact-channel" href="tel:+221771004908">
+                            <span class="landing-contact-channel__icon" aria-hidden="true"><i class="bi bi-telephone-fill"></i></span>
+                            <div class="landing-contact-channel__body">
+                                <div class="landing-contact-channel__label">Téléphone</div>
+                                <div class="landing-contact-channel__value">+221 77 100 49 08</div>
+                                <div class="landing-contact-channel__hint">Appel direct</div>
+                            </div>
+                            <span class="landing-contact-channel__arrow" aria-hidden="true"><i class="bi bi-arrow-up-right"></i></span>
+                        </a>
+                        <a class="landing-contact-channel" href="mailto:contact@qrcodeprint.com">
+                            <span class="landing-contact-channel__icon" aria-hidden="true"><i class="bi bi-envelope-fill"></i></span>
+                            <div class="landing-contact-channel__body">
+                                <div class="landing-contact-channel__label">E-mail</div>
+                                <div class="landing-contact-channel__value">contact@qrcodeprint.com</div>
+                                <div class="landing-contact-channel__hint">Écrivez-nous</div>
+                            </div>
+                            <span class="landing-contact-channel__arrow" aria-hidden="true"><i class="bi bi-arrow-up-right"></i></span>
+                        </a>
+                        <div class="landing-contact-channel landing-contact-channel--static">
+                            <span class="landing-contact-channel__icon" aria-hidden="true"><i class="bi bi-clock-fill"></i></span>
+                            <div class="landing-contact-channel__body">
+                                <div class="landing-contact-channel__label">Assistance</div>
+                                <div class="landing-contact-channel__value">24h/24 · 7j/7</div>
+                                <div class="landing-contact-channel__hint">Toujours joignable</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="landing-contact-form-card">
+                        {% if request.args.get('contact_sent') %}
+                        <div class="alert alert-success py-2 small" role="alert">
+                            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Message envoyé, merci ! Nous revenons vers vous rapidement.
+                        </div>
+                        {% endif %}
+                        {% if request.args.get('contact_error') %}
+                        <div class="alert alert-danger py-2 small" role="alert">
+                            <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Veuillez vérifier les champs du formulaire.
+                        </div>
+                        {% endif %}
+                        <div class="landing-contact-form-head">
+                            <h3 class="landing-contact-form-title">Envoyer un message</h3>
+                            <p class="landing-contact-form-sub">Question sur l’essai, l’abonnement ou l’utilisation de QR Code Print ? On vous répond.</p>
+                        </div>
+                        <form method="post" action="{{ url_for('contact_submit') }}" id="landingContactForm" class="landing-contact-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="landing-contact-label" for="contact_name">Nom complet *</label>
+                                    <input type="text" class="form-control landing-contact-input" id="contact_name" name="name" required maxlength="120" placeholder="Votre nom" autocomplete="name">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="landing-contact-label" for="contact_email">E-mail *</label>
+                                    <input type="email" class="form-control landing-contact-input" id="contact_email" name="email" required maxlength="180" placeholder="vous@exemple.com" autocomplete="email">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="landing-contact-label" for="contact_phone">Téléphone <span class="text-muted fw-normal">(facultatif)</span></label>
+                                    <input type="tel" class="form-control landing-contact-input" id="contact_phone" name="phone" maxlength="40" placeholder="+221 …" autocomplete="tel">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="landing-contact-label" for="contact_subject">Objet</label>
+                                    <input type="text" class="form-control landing-contact-input" id="contact_subject" name="subject" maxlength="160" placeholder="Essai, abonnement, aide…">
+                                </div>
+                                <div class="col-12">
+                                    <label class="landing-contact-label" for="contact_message">Message *</label>
+                                    <textarea class="form-control landing-contact-input landing-contact-textarea" id="contact_message" name="message" rows="5" required maxlength="4000" placeholder="Expliquez votre question en quelques lignes…"></textarea>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary landing-contact-submit" id="landingContactSubmit">
+                                Envoyer
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= FOOTER ================= -->
+    <footer class="landing-footer">
+        <div class="container">
+            <div class="row gy-4 align-items-center">
+                <div class="col-md-4">
+                    <a class="landing-brand" href="#top">
+                        <i class="bi bi-qr-code-scan"></i> QR Code Print
+                    </a>
+                    <p class="mt-2">Tickets & QR codes pour salles de sport.</p>
+                </div>
+                <div class="col-md-8">
+                    <ul class="landing-footer-links justify-content-md-end">
+                        <li><a href="#fonctionnalites">Fonctionnalités</a></li>
+                        <li><a href="#tarifs">Tarifs</a></li>
+                        <li><a href="#faq">FAQ</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                        <li><a href="{{ url_for('login') }}">Connexion</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="landing-footer-bottom">
+                <span>&copy; <span id="landingYear"></span> QR Code Print. Tous droits réservés.</span>
+            </div>
+        </div>
+    </footer>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Fermer"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- GSAP (animations) -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+</body>
+</html>
