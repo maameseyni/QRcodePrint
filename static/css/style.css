@@ -15,9 +15,8 @@
     --warning-color: #ffc107;
     --info-color: var(--brand-primary);
     --light-color: #f8f9fa;
-    /* Texte général de l'app (contenu des cartes). --dark-color reste fixe : il sert aussi les
-       champs de formulaire / boutons dropdown dont le fond (--bg-light) N'est PAS personnalisable —
-       les lier aurait pu rendre ces contrôles illisibles (texte clair sur fond resté blanc). */
+    /* Texte des titres/sous-titres posés sur le fond de page uniquement
+       (ex. « Paramètres » + ligne d’intro). Menu, cartes, tableaux : --dark-color fixe. */
     --app-text-color: #212529;
     --dark-color: #212529;
     --bg-light: #ffffff;
@@ -26,8 +25,8 @@
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.04);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
-    /* Même fond que la page login (humeur bleu-gris doux) */
-    --app-page-background: radial-gradient(1200px 600px at 15% 10%, #f5f8ff 0%, #e8edf6 45%, #e3e9f3 100%);
+    /* Fond de page par défaut */
+    --app-page-background: #f5f8ff;
     /* Champs de formulaire (inputs + sélecteurs custom) : même gabarit */
     --form-field-padding-y: 0.65rem;
     --form-field-padding-x: 1rem;
@@ -47,7 +46,8 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--app-text-color);
+    /* Ne PAS utiliser --app-text-color ici : ça peignait menu/cartes. */
+    color: var(--dark-color);
 }
 
 /* Navigation */
@@ -162,6 +162,8 @@ body > .container.index-main-wrap {
 
 /* Barre flottante : détachée du haut et des bords, coins arrondis (ne touche jamais le haut de la page) */
 .custom-navbar {
+    /* Stable au rechargement / reset branding (pas de translate GSAP). */
+    transform: none !important;
     background: rgba(255, 255, 255, 0.92) !important;
     -webkit-backdrop-filter: saturate(180%) blur(10px);
     backdrop-filter: saturate(180%) blur(10px);
@@ -322,6 +324,7 @@ body > .container.index-main-wrap {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 40vw;
+    color: var(--brand-primary) !important;
 }
 
 .printer-status-text {
@@ -384,9 +387,8 @@ body > .container.index-main-wrap {
     border-radius: 16px;
     overflow: hidden;
     background: var(--bg-light);
-    /* Bootstrap fixe sa propre couleur sur .card (var(--bs-body-color)), ce qui coupait l'héritage
-       depuis body : on la reprend explicitement pour que la couleur de texte personnalisée s'applique. */
-    color: var(--app-text-color);
+    /* Toujours sombre dans les cadres — indépendant de la couleur des titres de page. */
+    color: var(--dark-color);
     transition: all 0.3s ease;
 }
 
@@ -1010,22 +1012,31 @@ select.form-select:-webkit-autofill:focus {
     box-shadow: 0 0 0 3px rgba(26, 39, 69, 0.12);
 }
 
-/* —— Liste des tickets (/tickets) —— */
-/* Titres de page : suivent la couleur de texte personnalisable (pas la couleur principale), pour
-   rester lisibles quel que soit le fond choisi — voir --app-text-color. */
-.page-tickets .tickets-page-title {
-    font-weight: 700;
-    letter-spacing: -0.02em;
+/* —— Textes UNIQUEMENT sur le fond de page (image : titre + sous-titre hors cadre) ——
+   --app-text-color ne doit peindre que ces sélecteurs (et le statut imprimante sur le fond).
+   Menu, tableaux, contenus de .card : jamais. */
+.page-tickets .tickets-page-title,
+.page-tickets .tickets-title-icon,
+.page-owner-dashboard .dashboard-page-title,
+.page-owner-dashboard .dashboard-title-icon,
+.page-settings .settings-page-title,
+.page-settings .settings-title-icon {
     color: var(--app-text-color);
 }
 
+.page-tickets .tickets-page-title {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
 .page-tickets .tickets-title-icon {
-    color: var(--app-text-color);
     margin-right: 0.35rem;
 }
 
 .page-tickets .tickets-page-subtitle {
     max-width: 26rem;
+    color: var(--app-text-color) !important;
+    opacity: 0.78;
 }
 
 /* —— Dashboard propriétaire (/dashboard) —— */
@@ -1037,21 +1048,23 @@ select.form-select:-webkit-autofill:focus {
 .page-owner-dashboard .dashboard-page-title {
     font-weight: 700;
     letter-spacing: -0.02em;
-    color: var(--app-text-color);
 }
 
 .page-owner-dashboard .dashboard-title-icon {
-    color: var(--app-text-color);
     margin-right: 0.35rem;
 }
 
 .page-owner-dashboard .dashboard-page-subtitle {
     max-width: 28rem;
+    color: var(--app-text-color) !important;
+    opacity: 0.78;
 }
 
 .page-owner-dashboard .dashboard-section-label {
     letter-spacing: 0.06em;
     font-size: 0.7rem;
+    color: var(--app-text-color) !important;
+    opacity: 0.72;
 }
 
 .page-owner-dashboard .dashboard-stats-row > [class*="col-"],
@@ -1259,16 +1272,16 @@ select.form-select:-webkit-autofill:focus {
 .page-settings .settings-page-title {
     font-weight: 700;
     letter-spacing: -0.02em;
-    color: var(--app-text-color);
 }
 
 .page-settings .settings-title-icon {
-    color: var(--app-text-color);
     margin-right: 0.35rem;
 }
 
 .page-settings .settings-page-subtitle {
     max-width: 36rem;
+    color: var(--app-text-color) !important;
+    opacity: 0.78;
 }
 
 .page-settings .settings-account-card .form-control {
@@ -1345,47 +1358,78 @@ select.form-select:-webkit-autofill:focus {
     font-size: 1.5rem;
 }
 
-/* Aperçu combiné (fond + cadre + texte + bouton) dans Paramètres > Personnalisation */
+/* Aperçu : titre + sous-titre à gauche, cadre à droite (compact en hauteur) */
 .brand-live-preview {
     border-radius: 16px;
-    padding: 1.5rem;
+    padding: 0.9rem 1.15rem;
     background: var(--app-page-background);
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
+}
+
+.brand-live-preview__inner {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.25rem;
+}
+
+.brand-live-preview__titles {
+    flex: 1 1 12rem;
+    min-width: 0;
 }
 
 .brand-live-preview__card {
-    width: 100%;
-    max-width: 26rem;
-    border-radius: 14px;
+    flex: 1 1 16rem;
+    width: auto;
+    max-width: 100%;
+    border-radius: 12px;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    padding: 1.5rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    padding: 0.65rem 0.85rem;
     background: var(--bg-light);
+    color: var(--dark-color);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.65rem 0.85rem;
+}
+
+.brand-live-preview__card-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
 }
 
 .brand-live-preview__eyebrow {
     font-weight: 700;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.06em;
-    margin-bottom: 0.5rem;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    margin-bottom: 0.2rem;
     color: var(--app-text-color);
     transition: color 0.2s ease;
 }
 
 .brand-live-preview__text {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     color: var(--app-text-color);
+    opacity: 0.78;
     transition: color 0.2s ease;
 }
 
 .brand-preview-btn {
+    flex: 0 0 auto;
     background-color: var(--brand-primary);
     border-color: var(--brand-primary);
     color: #fff;
     font-weight: 600;
     pointer-events: none;
+    white-space: nowrap;
 }
 
 .tickets-filters-card {
@@ -2060,7 +2104,7 @@ html {
 }
 
 .ticket-preview-modal .ticket-preview-modal-body {
-    background: linear-gradient(180deg, #eef2fa 0%, #e8edf6 55%, #e4eaf4 100%);
+    background: #f5f8ff;
     padding: 1rem 1rem 1.35rem;
 }
 

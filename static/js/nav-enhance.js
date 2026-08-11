@@ -27,8 +27,10 @@
         navList.appendChild(indicator);
 
         var hasGsap = typeof gsap !== 'undefined';
+        var firstPlace = true;
 
-        function place(el) {
+        function place(el, opts) {
+            opts = opts || {};
             if (!el) {
                 if (hasGsap) {
                     gsap.to(indicator, { opacity: 0, duration: 0.15, overwrite: true });
@@ -41,6 +43,8 @@
             var cr = navList.getBoundingClientRect();
             var x = lr.left - cr.left;
             var y = lr.top - cr.top;
+            var instant = opts.instant || firstPlace;
+            firstPlace = false;
             if (hasGsap) {
                 gsap.to(indicator, {
                     x: x,
@@ -48,8 +52,8 @@
                     width: lr.width,
                     height: lr.height,
                     opacity: 1,
-                    duration: 0.35,
-                    ease: 'back.out(1.7)',
+                    duration: instant ? 0 : 0.35,
+                    ease: instant ? 'none' : 'back.out(1.7)',
                     overwrite: true,
                 });
             } else {
@@ -68,11 +72,12 @@
             link.addEventListener('focus', function () { place(link); });
         });
         navList.addEventListener('mouseleave', resetToActive);
-        window.addEventListener('resize', resetToActive);
+        window.addEventListener('resize', function () { place(activeLink, { instant: true }); });
         nav.addEventListener('shown.bs.collapse', resetToActive);
         nav.addEventListener('hidden.bs.collapse', resetToActive);
-        // Laisse les icônes/polices se poser avant de mesurer (évite un indicateur à largeur 0).
-        setTimeout(resetToActive, 60);
+        // Pose immédiate + re-mesure après polices (sans bounce pour éviter un « saut » du menu).
+        place(activeLink, { instant: true });
+        setTimeout(function () { place(activeLink, { instant: true }); }, 60);
     }
 
     document.addEventListener('DOMContentLoaded', function () {

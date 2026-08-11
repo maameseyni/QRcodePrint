@@ -1,5 +1,5 @@
 /*
- * Animations d'entrée au chargement, pilotées par GSAP (menu + cartes de chaque page).
+ * Animations d'entrée au chargement, pilotées par GSAP (cartes de chaque page — pas la navbar).
  * Ce script est chargé sur toutes les pages ; chaque sélecteur n'existe que sur certaines
  * d'entre elles (ex. .dashboard-stats-row uniquement sur /dashboard) — les sélecteurs absents
  * ne produisent simplement aucune animation, sans erreur.
@@ -24,17 +24,13 @@
             tl.from(els, opts || { stagger: 0.07 }, position);
         }
 
-        var nav = document.querySelector('.custom-navbar');
-        if (nav) {
-            tl.from(nav, { y: -18, opacity: 0, duration: 0.5, ease: 'power3.out', clearProps: 'transform,opacity' }, 0);
-        }
-
+        // Navbar volontairement non animée (évite un glissement au rechargement / « Réinitialiser tout »).
         // Accueil
-        add('.index-qr-main-row > .col-lg-6:first-child .index-qr-card', 0.08);
-        add('.index-qr-main-row > .col-lg-6:last-child .index-qr-card', 0.16);
+        add('.index-qr-main-row > .col-lg-6:first-child .index-qr-card', 0);
+        add('.index-qr-main-row > .col-lg-6:last-child .index-qr-card', 0.08);
 
-        // Tickets / Dashboard / Paramètres : en-tête de page
-        add('.tickets-page-head, .dashboard-page-head, .settings-page-head', 0.05);
+        // En-têtes de page : fondu seul (pas de translateY sous le menu fixe)
+        add('.tickets-page-head, .dashboard-page-head, .settings-page-head', 0.05, { y: 0, stagger: 0 });
 
         // Tickets
         add('.row.mb-4 > .col-md-4 > .card', 0.12, { stagger: 0.07 });

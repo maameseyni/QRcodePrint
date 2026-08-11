@@ -2119,6 +2119,19 @@ def settings():
                 g.pop('_qrprint_user', None)
             return redirect(url_for('settings', text_reset='1'))
 
+        elif action == 'reset_all_branding':
+            # Fond + textes sur le fond uniquement — couleur principale/logo inchangés (menu, boutons).
+            store.update_user(
+                user['id'],
+                {
+                    'brand_bg_color': '',
+                    'brand_text_color': '',
+                },
+            )
+            if hasattr(g, '_qrprint_user'):
+                g.pop('_qrprint_user', None)
+            return redirect(url_for('settings', branding_all_reset='1'))
+
         else:
             username = str(user.get('username') or '').strip().lower()[:64]
             email = (request.form.get('email') or '').strip().lower()
