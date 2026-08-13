@@ -43,6 +43,11 @@ class Config:
     SECRET_KEY = _ENV_SECRET_KEY or os.urandom(32).hex()
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     DEBUG = _to_bool.__func__(os.environ.get('FLASK_DEBUG'), default=False)
+    # Render définit RENDER. En local : relire les templates à chaque requête et
+    # ne pas laisser le navigateur garder un CSS/JS périmé (sinon un F5 ne suffit pas).
+    _ON_RENDER = bool(os.environ.get('RENDER') or os.environ.get('RENDER_EXTERNAL_HOSTNAME'))
+    TEMPLATES_AUTO_RELOAD = DEBUG or not _ON_RENDER
+    SEND_FILE_MAX_AGE_DEFAULT = 0 if (DEBUG or not _ON_RENDER) else 12 * 3600
     # Render/Heroku définissent PORT ; en local on utilise APP_PORT (ex. 5055).
     APP_PORT = int(os.environ.get('PORT') or os.environ.get('APP_PORT', '5055'))
     

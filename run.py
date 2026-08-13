@@ -1,5 +1,5 @@
 """
-Script de démarrage pour l'application QR Code Print
+Script de démarrage pour l'application Prime Access
 """
 from dotenv import load_dotenv
 
@@ -9,7 +9,7 @@ from app import app, init_db, cleanup_expired_qr
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("QR Code Print - Impression Thermique")
+    print("Prime Access - Impression Thermique")
     print("=" * 50)
     
     # Initialisation de la base de données

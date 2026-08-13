@@ -70,6 +70,10 @@ def _echo_request_id(resp):
     rid = getattr(g, 'request_id', None)
     if rid:
         resp.headers['X-Request-ID'] = rid
+    # En local : forcer le navigateur à revalider HTML / CSS / JS (évite les 304 stale).
+    if not os.environ.get('RENDER') and not os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+        if resp.mimetype == 'text/html' or request.path.startswith('/static/'):
+            resp.headers['Cache-Control'] = 'no-cache, max-age=0, must-revalidate'
     return resp
 
 oauth = OAuth(app)
@@ -480,6 +484,22 @@ def require_gym_owner_session(func):
             return redirect(url_for('complete_profile'))
         return func(*args, **kwargs)
     return wrapper
+
+
+def _static_mtime(filename):
+    """mtime du fichier static (cache-bust navigateur)."""
+    path = os.path.join(app.static_folder or '', filename.replace('/', os.sep))
+    try:
+        return int(os.path.getmtime(path))
+    except OSError:
+        return 0
+
+
+@app.context_processor
+def inject_static_url():
+    def dated_url_for(filename):
+        return url_for('static', filename=filename, v=_static_mtime(filename))
+    return {'dated_url_for': dated_url_for}
 
 
 @app.context_processor

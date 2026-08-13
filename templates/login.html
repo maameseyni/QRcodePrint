@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Connexion - QR Code Print</title>
+    <title>Connexion - Prime Access</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+    <link rel="stylesheet" href="{{ dated_url_for('css/style.css') }}">
+    <link rel="stylesheet" href="{{ dated_url_for('css/landing.css') }}">
     <style>
         :root {
             --brand-primary: {{ brand_primary_color }};
@@ -19,23 +19,23 @@
     </style>
 </head>
 <body class="login-page">
-    <nav class="landing-nav">
-        <div class="landing-nav-inner">
+    <nav class="landing-nav landing-shell">
+        <div class="landing-nav__inner">
             <a class="landing-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-qr-code-scan"></i> QR Code Print
+                <i class="bi bi-qr-code-scan" aria-hidden="true"></i> Prime Access
             </a>
-            <ul class="landing-nav-links" id="landingNavLinks">
+            <ul class="landing-nav__links" id="landingNavLinks">
                 <li><a href="{{ url_for('index') }}#fonctionnalites">Fonctionnalités</a></li>
                 <li><a href="{{ url_for('index') }}#tarifs">Tarifs</a></li>
-                <li><a href="{{ url_for('index') }}#contact">Contact</a></li>
                 <li><a href="{{ url_for('index') }}#faq">FAQ</a></li>
+                <li><a href="{{ url_for('index') }}#contact">Contact</a></li>
             </ul>
-            <div class="landing-nav-cta">
-                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-                    <span class="landing-nav-cta-label">Accueil</span>
-                    <i class="bi bi-house ms-1" aria-hidden="true"></i>
+            <div class="landing-nav__actions">
+                <a href="{{ url_for('index') }}" class="landing-nav__cta">
+                    <span>Accueil</span>
+                    <i class="bi bi-house" aria-hidden="true"></i>
                 </a>
-                <button type="button" class="landing-nav-toggle" id="landingNavToggle" aria-label="Ouvrir le menu" aria-expanded="false">
+                <button type="button" class="landing-nav__toggle" id="landingNavToggle" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="landingNavLinks">
                     <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
             </div>
@@ -208,7 +208,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <script src="{{ url_for('static', filename='js/senegal-phone.js') }}"></script>
     <script src="{{ url_for('static', filename='js/page-enter.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+    <script src="{{ dated_url_for('js/landing.js') }}"></script>
     <script>
         document.querySelectorAll('.neumo-eye-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {

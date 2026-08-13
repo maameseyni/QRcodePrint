@@ -1,4 +1,4 @@
-# 🖨️ QR Code Print - Application Flask pour Impression Thermique POS
+# 🖨️ Prime Access - Application Flask pour Impression Thermique POS
 
 Application web complète pour générer et imprimer des QR Codes via une imprimante thermique POS (80mm).
 
