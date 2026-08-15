@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Connexion - Prime Access</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ dated_url_for('images/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ dated_url_for('images/favicon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ dated_url_for('images/apple-touch-icon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,560&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ dated_url_for('css/style.css') }}">
@@ -18,11 +24,11 @@
         }
     </style>
 </head>
-<body class="login-page">
+<body class="login-page" id="top">
     <nav class="landing-nav landing-shell">
         <div class="landing-nav__inner">
-            <a class="landing-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-qr-code-scan" aria-hidden="true"></i> Prime Access
+            <a class="landing-brand" href="{{ url_for('index') }}" aria-label="Prime Access">
+                <img src="{{ dated_url_for('images/primeAccess-bleu.png') }}" alt="Prime Access" class="landing-brand__logo" width="180" height="40" decoding="async">
             </a>
             <ul class="landing-nav__links" id="landingNavLinks">
                 <li><a href="{{ url_for('index') }}#fonctionnalites">Fonctionnalités</a></li>
@@ -194,6 +200,58 @@
             </div>
         </section>
     </main>
+
+    <footer class="landing-footer">
+        <div class="landing-shell">
+            <div class="landing-footer__bar" aria-hidden="true"></div>
+
+            <div class="landing-footer__brand">
+                <a href="{{ url_for('index') }}" aria-label="Prime Access — retour à l’accueil">
+                    <img src="{{ dated_url_for('images/primeAccess-bleu.png') }}" alt="Prime Access" class="landing-footer__logo" width="440" height="98" loading="lazy" decoding="async">
+                </a>
+                <p class="landing-footer__tagline">Le comptoir qui imprime ses reçus et compte sa caisse, sans tableur ni paperasse.</p>
+            </div>
+
+            <div class="landing-footer__grid" id="landingFooterGrid">
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                    <h3 class="landing-footer__title">Le produit</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="{{ url_for('index') }}#fonctionnalites">Ce que fait l’app</a></li>
+                        <li><a href="{{ url_for('index') }}#comment-ca-marche">Prise en main</a></li>
+                        <li><a href="{{ url_for('index') }}#tarifs">Formules</a></li>
+                    </ul>
+                </div>
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-person-badge"></i></span>
+                    <h3 class="landing-footer__title">Votre compte</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="#login-pane">Se connecter</a></li>
+                        <li><a href="#signup-pane" id="footerSignupLink">Ouvrir un compte</a></li>
+                        <li><a href="{{ url_for('index') }}#faq">Questions fréquentes</a></li>
+                    </ul>
+                </div>
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-headset"></i></span>
+                    <h3 class="landing-footer__title">Nous joindre</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="https://wa.me/221771004908" target="_blank" rel="noopener"><i class="bi bi-whatsapp" aria-hidden="true"></i>WhatsApp</a></li>
+                        <li><a href="tel:+221771004908"><i class="bi bi-telephone-fill" aria-hidden="true"></i>+221 77 100 49 08</a></li>
+                        <li><a href="mailto:contact@primeaccess.com"><i class="bi bi-envelope-fill" aria-hidden="true"></i>contact@primeaccess.com</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="landing-footer__bottom">
+                <span>&copy; <span id="landingYear"></span> Prime Access — Conçu à Dakar, Sénégal.</span>
+                <ul class="landing-footer__meta">
+                    <li><a href="{{ url_for('index') }}#contact">Écrire au support</a></li>
+                    <li><a class="landing-footer__totop" href="#top" aria-label="Revenir en haut de page"><i class="bi bi-arrow-up" aria-hidden="true"></i></a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
     <div class="toast-container position-fixed bottom-0 end-0 p-3">
         <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
@@ -222,6 +280,28 @@
                     icon.classList.toggle('bi-eye', !show);
                     icon.classList.toggle('bi-eye-slash', show);
                 }
+            });
+        });
+
+        /* Footer « Ouvrir un compte » / « Se connecter » : bascule l’onglet Bootstrap. */
+        function activateAuthTab(tabId) {
+            var tabBtn = document.getElementById(tabId);
+            if (!tabBtn || typeof bootstrap === 'undefined') return;
+            bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+            var card = document.querySelector('.neumo-card');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        var footerSignup = document.getElementById('footerSignupLink');
+        if (footerSignup) {
+            footerSignup.addEventListener('click', function (e) {
+                e.preventDefault();
+                activateAuthTab('signup-tab');
+            });
+        }
+        document.querySelectorAll('a[href="#login-pane"]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                activateAuthTab('login-tab');
             });
         });
     </script>

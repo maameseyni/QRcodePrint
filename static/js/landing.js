@@ -64,13 +64,13 @@
         if (REDUCE_MOTION) return;
         if (window.matchMedia && window.matchMedia('(hover: none)').matches) return;
 
-        var grids = document.querySelectorAll('#landingStepsGrid, #landingFeaturesGrid, #landingPricingGrid');
+        var grids = document.querySelectorAll('#landingStepsGrid, #landingFeaturesGrid, #landingPricingGrid, #landingFooterGrid');
         if (!grids.length) return;
 
         var pending = null;
         grids.forEach(function (grid) {
             grid.addEventListener('pointermove', function (e) {
-                var card = e.target.closest ? e.target.closest('.landing-step, .landing-feature, .landing-plan') : null;
+                var card = e.target.closest ? e.target.closest('.landing-step, .landing-feature, .landing-plan, .landing-footer__col') : null;
                 if (!card || pending) return;
                 pending = requestAnimationFrame(function () {
                     pending = null;
@@ -96,6 +96,7 @@
             { sel: '#landingContactHead' },
             { sel: '#landingContactCard', children: '.landing-contact__panel, .landing-form-card', stagger: 0.12 },
             { sel: '#landingCtaBand', scale: 0.98 },
+            { sel: '#landingFooterGrid', children: '.landing-footer__col', stagger: 0.09, scale: 0.97 },
         ];
 
         if (!hasGsap || REDUCE_MOTION || typeof IntersectionObserver === 'undefined') {

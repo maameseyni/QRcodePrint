@@ -1,11 +1,14 @@
 /* Styles personnalisés pour l'application QR Code */
 
 :root {
-    /* Personnalisation utilisateur (paramètres > Personnalisation) ; valeurs par défaut = navy historique. */
-    --brand-primary: #1a2745;
-    --brand-primary-dark: #141d32;
-    --brand-primary-darker: #0f1624;
-    --brand-primary-rgb: 26, 39, 69;
+    /* Personnalisation utilisateur (paramètres > Personnalisation) ; valeurs par défaut = bleu du logo. */
+    --brand-primary: #4d81c2;
+    --brand-primary-dark: #3f699f;
+    --brand-primary-darker: #2f4f78;
+    --brand-primary-rgb: 77, 129, 194;
+    /* Couleur secondaire de marque : encre foncée, réservée aux accents (survols, bordures, footer). */
+    --brand-secondary: #161c33;
+    --brand-secondary-rgb: 22, 28, 51;
     --primary-color: var(--brand-primary);
     --primary-dark: var(--brand-primary-dark);
     --primary-light: var(--brand-primary);
@@ -2357,19 +2360,33 @@ body.login-page {
     background: var(--app-page-background) !important;
     background-attachment: fixed !important;
     overflow-x: hidden;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+    /* Nécessaire pour que la couche ::before (z-index -1) passe devant le fond du body. */
+    isolation: isolate;
+}
+
+/* Même trame de fond que la landing. */
+body.login-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--app-page-background);
+    background-image:
+        linear-gradient(rgba(var(--shadow-ink), 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--shadow-ink), 0.035) 1px, transparent 1px);
+    background-size: 54px 54px;
+    pointer-events: none;
 }
 
 .login-page-shell {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: clamp(1rem, 3vw, 2.5rem);
     box-sizing: border-box;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
 }
 
 .login-page-card-wrap {
@@ -2394,83 +2411,135 @@ body.login-page {
     }
 }
 
-/* ===== Login Neumorphism (dark-blue accent) — fond = --app-page-background ===== */
+/* ===== Connexion — même langage visuel que la landing (carte blanche, accents bleus) ===== */
 
 .login-page .login-page-shell {
     position: relative;
-    min-height: 100vh;
-    min-height: 100dvh;
+    min-height: calc(100dvh - 7.5rem);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.6rem;
+    /* Descendre un peu la carte sous le menu. */
+    padding: clamp(2.75rem, 6vw, 4.5rem) 1.6rem clamp(1.5rem, 3vw, 2.5rem);
     box-sizing: border-box;
-    overflow-x: hidden;
-    overflow-y: auto;
+    /* Pas d'overflow ici : « hidden » sur un seul axe force l'autre en « auto »,
+       ce qui découperait le halo au carré (le débordement est géré par le body). */
+}
+
+.login-page .landing-footer {
+    margin-top: clamp(2rem, 4.5vw, 3.5rem);
+    padding-block: clamp(2.25rem, 4vw, 3.25rem) 1rem;
+}
+
+.login-page .landing-nav {
+    margin-top: clamp(1.1rem, 2.4vw, 1.75rem);
+    top: clamp(1.1rem, 2.4vw, 1.75rem);
+}
+
+.login-page .landing-footer__bar {
+    margin-bottom: clamp(1.6rem, 3vw, 2.25rem);
+}
+
+/* Halo bleu qui décolle la carte du fond, comme la scène du hero. */
+.login-page .login-page-shell::before {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    left: 50%;
+    top: 48%;
+    width: min(1020px, 92%);
+    height: min(680px, 82%);
+    transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side,
+                rgba(var(--brand-primary-rgb), 0.13) 0%,
+                rgba(var(--brand-primary-rgb), 0.06) 42%,
+                transparent 72%);
+    pointer-events: none;
 }
 
 .login-page .neumo-card {
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 760px;
-    background: #e8edf6;
-    border-radius: 22px;
-    padding: 3.2rem 3.1rem 2.7rem;
-    box-shadow: 14px 14px 28px #c9d0dd, -14px -14px 28px #ffffff;
+    margin-top: clamp(1.25rem, 3vw, 2.5rem);
+    background: #fff;
+    border-radius: var(--radius-lg, 26px);
+    padding: clamp(1.9rem, 4vw, 3rem) clamp(1.5rem, 4vw, 3rem) clamp(1.7rem, 3.2vw, 2.4rem);
+    border: 1px solid var(--line);
+    /* Ombre en couches : chaque palier double le flou, la décroissance reste douce
+       (un gros étalement négatif la ramènerait à une bande droite sous la carte). */
+    box-shadow:
+        0 1px 2px rgba(var(--shadow-ink), 0.04),
+        0 4px 9px rgba(var(--shadow-ink), 0.04),
+        0 11px 24px rgba(var(--shadow-ink), 0.05),
+        0 26px 52px rgba(var(--shadow-ink), 0.06),
+        0 48px 96px rgba(var(--shadow-ink), 0.07);
     text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.65);
 }
 
 .login-page .neumo-avatar {
-    width: 64px;
-    height: 64px;
+    width: 3.1rem;
+    height: 3.1rem;
     margin: 0 auto 1rem;
-    border-radius: 50%;
+    border-radius: 15px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #1a2745;
-    font-size: 1.5rem;
-    background: linear-gradient(145deg, #eef2fa, #dde4f0);
-    box-shadow: 8px 8px 16px #c9d0dd, -8px -8px 16px #ffffff;
+    color: var(--brand-primary);
+    font-size: 1.35rem;
+    background: linear-gradient(140deg, rgba(var(--brand-primary-rgb), 0.14), rgba(var(--brand-secondary-rgb), 0.1));
+    box-shadow: none;
 }
 
 .login-page .neumo-title {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1a2745;
-    margin-bottom: 0.1rem;
+    font-family: Fraunces, Georgia, serif;
+    font-style: italic;
+    font-size: clamp(1.85rem, 3.6vw, 2.35rem);
+    font-weight: 560;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
 }
 
 .login-page .neumo-subtitle {
-    color: #7d879a;
-    font-size: 0.9rem;
-    margin-bottom: 0.6rem;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    margin-bottom: 0.9rem;
 }
 
+/* Sélecteur segmenté : un rail gris, l'onglet actif en bleu de marque. */
 .login-page .neumo-tabs {
-    display: flex;
-    gap: 0.6rem;
+    display: inline-flex;
+    gap: 0.25rem;
     justify-content: center;
-    margin-bottom: 1.1rem !important;
-    padding: 0.2rem;
+    margin: 0 auto 1.35rem !important;
+    padding: 0.3rem;
+    border-radius: 999px;
+    background: #f4f7fc;
+    border: 1px solid var(--line);
 }
 
 .login-page .neumo-tabs .nav-link {
     border: none;
-    color: #6d7892;
+    color: var(--ink-soft);
     border-radius: 999px;
-    padding: 0.45rem 0.95rem;
-    background: #e8edf6;
-    box-shadow: inset 4px 4px 9px #d1d8e5, inset -4px -4px 9px #ffffff;
+    padding: 0.5rem 1.1rem;
+    background: transparent;
+    box-shadow: none;
     font-weight: 600;
     min-width: 130px;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-page .neumo-tabs .nav-link:hover {
+    color: var(--brand-primary);
 }
 
 .login-page .neumo-tabs .nav-link.active {
     color: #fff;
-    background: #1a2745;
-    box-shadow: 6px 6px 14px #bac3d3, -6px -6px 14px #ffffff;
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+    box-shadow: 0 12px 22px -14px rgba(var(--brand-primary-rgb), 0.9);
 }
 
 .login-page .neumo-input-wrap {
@@ -2479,49 +2548,65 @@ body.login-page {
 
 .login-page .neumo-input-icon {
     position: absolute;
-    left: 0.95rem;
+    left: 1rem;
     top: 50%;
     transform: translateY(-50%);
     z-index: 2;
-    color: #5d6d7e;
+    color: var(--ink-faint);
     pointer-events: none;
     line-height: 1;
+    transition: color 0.22s ease;
 }
 
+.login-page .neumo-input-wrap:focus-within .neumo-input-icon {
+    color: var(--brand-primary);
+}
+
+/* Champs blancs sur la carte : bordure fine au repos, anneau bleu au focus. */
 .login-page .neumo-input {
     position: relative;
     z-index: 0;
-    border: none !important;
-    border-radius: 12px !important;
-    background: #e8edf6 !important;
-    padding: 0.95rem 1rem 0.95rem 2.6rem !important;
-    box-shadow: inset 6px 6px 12px #d1d8e5, inset -6px -6px 12px #ffffff !important;
-    color: #5d6d7e !important;
+    border: 1.5px solid var(--line) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    padding: 0.85rem 1rem 0.85rem 2.7rem !important;
+    box-shadow: none !important;
+    color: var(--ink) !important;
+    transition: background-color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.login-page .neumo-input:hover {
+    border-color: rgba(var(--brand-primary-rgb), 0.28) !important;
+    background: #fff !important;
 }
 
 .login-page .neumo-input:focus {
-    box-shadow: inset 5px 5px 10px #c9d0dd, inset -5px -5px 10px #ffffff !important;
+    background: #fff !important;
+    border-color: rgba(var(--brand-primary-rgb), 0.45) !important;
+    box-shadow: 0 0 0 0.25rem rgba(var(--brand-primary-rgb), 0.1) !important;
 }
 
 /* Préfixe +221 (inscription / compléter profil) : icône + indicatif dans le même bloc que .neumo-input */
 .login-page .input-group > .input-group-text.phone-sn-prefix {
-    border: none !important;
-    border-radius: 12px 0 0 12px !important;
-    background: #e8edf6 !important;
-    box-shadow: inset 6px 6px 12px #d1d8e5, inset -3px -3px 10px #ffffff !important;
-    color: #5d6d7e !important;
+    border: 1.5px solid var(--line) !important;
+    border-right: 0 !important;
+    border-radius: 14px 0 0 14px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: var(--ink-soft) !important;
     font-weight: 400 !important;
-    padding: 0.95rem 0.65rem 0.95rem 0.85rem !important;
+    padding: 0.85rem 0.65rem 0.85rem 0.85rem !important;
     font-size: 1rem;
     line-height: 1.25;
     align-items: center;
     display: inline-flex;
     flex-direction: row;
     gap: 0.4rem;
+    transition: background-color 0.22s ease, border-color 0.22s ease;
 }
 
 .login-page .phone-sn-inline-icon {
-    color: #5d6d7e;
+    color: var(--ink-faint);
     font-size: 1rem;
     line-height: 1;
     flex-shrink: 0;
@@ -2529,16 +2614,18 @@ body.login-page {
 }
 
 .login-page .input-group:focus-within > .input-group-text.phone-sn-prefix {
-    box-shadow: inset 5px 5px 10px #c9d0dd, inset -3px -3px 8px #ffffff !important;
+    background: #fff !important;
+    border-color: rgba(var(--brand-primary-rgb), 0.45) !important;
 }
 
 .login-page .input-group > .form-control.neumo-input.border-start-0 {
-    border-radius: 0 12px 12px 0 !important;
-    padding: 0.95rem 1rem 0.95rem 0.75rem !important;
+    border-left: 0 !important;
+    border-radius: 0 14px 14px 0 !important;
+    padding: 0.85rem 1rem 0.85rem 0.75rem !important;
 }
 
 .login-page .neumo-input::placeholder {
-    color: #94a3b8;
+    color: #a6aec1;
 }
 
 /* Un seul œil : masquer le bouton natif Edge / Chromium (sinon doublon avec .neumo-eye-btn) */
@@ -2585,8 +2672,8 @@ body.login-page {
 }
 
 .login-page .neumo-eye-btn:hover {
-    color: #4a5568;
-    background: rgba(74, 85, 104, 0.1);
+    color: var(--brand-primary);
+    background: rgba(var(--brand-primary-rgb), 0.08);
 }
 
 .login-page #login-pane .neumo-form {
@@ -2627,8 +2714,8 @@ body.login-page {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.82rem;
-    color: #94a3b8;
+    font-size: 0.85rem;
+    color: var(--ink-faint);
 }
 
 .login-page .neumo-check {
@@ -2641,44 +2728,52 @@ body.login-page {
 }
 
 .login-page .neumo-check .form-check-input:checked {
-    background-color: #1a2745;
-    border-color: #1a2745;
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
 }
 
 .login-page .neumo-check .form-check-input:focus {
-    border-color: #1a2745;
-    box-shadow: 0 0 0 0.2rem rgba(26, 39, 69, 0.25);
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.25);
 }
 
 .login-page .neumo-link {
     text-decoration: none;
-    color: #5e6a86;
+    color: var(--ink-soft);
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.login-page .neumo-link:hover {
+    color: var(--brand-primary);
 }
 
 .login-page .neumo-btn {
     border: none;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #1a2745 0%, #141d32 100%);
+    border-radius: 999px;
+    background: var(--brand-primary);
     color: #fff;
     font-weight: 700;
-    padding: 0.75rem 1rem;
-    box-shadow: 10px 10px 18px #c2cada, -10px -10px 18px #ffffff;
-    transition: transform 0.2s ease, filter 0.2s ease;
+    padding: 0.9rem 1rem;
+    box-shadow: 0 20px 38px -20px rgba(var(--brand-primary-rgb), 0.9);
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .login-page .neumo-btn:hover {
-    filter: brightness(1.04);
-    transform: translateY(-1px);
+    background: var(--brand-primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 26px 46px -20px rgba(var(--brand-primary-rgb), 0.95);
 }
 
 .login-page .neumo-divider {
-    margin: 1.2rem 0 0.9rem;
+    margin: 1.4rem 0 1rem;
     font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    color: #95a0b8;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    color: var(--ink-faint);
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.7rem;
 }
 
 .login-page .neumo-divider::before,
@@ -2686,7 +2781,7 @@ body.login-page {
     content: "";
     flex: 1;
     height: 1px;
-    background: #cfd7e6;
+    background: var(--line);
 }
 
 .login-page .neumo-socials {
@@ -2696,26 +2791,27 @@ body.login-page {
 }
 
 .login-page .neumo-social-btn {
-    border: none;
     min-width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    color: #6e7891;
-    background: #e8edf6;
-    box-shadow: 7px 7px 14px #c9d0dd, -7px -7px 14px #ffffff;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    height: 44px;
+    border-radius: 999px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 28px -22px rgba(var(--shadow-ink), 0.7);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .login-page .neumo-social-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 9px 9px 18px #c4cbda, -9px -9px 18px #ffffff;
+    transform: translateY(-2px);
+    border-color: rgba(var(--brand-primary-rgb), 0.28);
+    box-shadow: 0 18px 32px -20px rgba(var(--brand-primary-rgb), 0.6);
 }
 
 .login-page .neumo-google-btn {
-    padding: 0.45rem 1rem;
+    padding: 0.45rem 1.5rem;
     width: auto;
     font-weight: 600;
-    color: #49546f;
+    color: var(--ink);
 }
 
 .login-page .google-logo {

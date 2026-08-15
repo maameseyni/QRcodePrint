@@ -6,6 +6,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="Prime Access — Créez le ticket de votre client, imprimez son reçu sur imprimante thermique 80 mm et suivez vos recettes du jour. Espèces, Orange Money, Wave. Comptes caissiers et export CSV.">
     <title>Prime Access — Reçus thermiques &amp; suivi de caisse</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ dated_url_for('images/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ dated_url_for('images/favicon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ dated_url_for('images/apple-touch-icon.png') }}">
 
     <link rel="preload" as="image" href="{{ dated_url_for('images/ticket-840.png') }}"
           imagesrcset="{{ dated_url_for('images/ticket-840.png') }} 840w, {{ dated_url_for('images/ticket-1260.png') }} 1260w"
@@ -37,8 +40,8 @@
 
     <nav class="landing-nav landing-shell">
         <div class="landing-nav__inner">
-            <a class="landing-brand" href="#top">
-                <i class="bi bi-qr-code-scan" aria-hidden="true"></i> Prime Access
+            <a class="landing-brand" href="#top" aria-label="Prime Access">
+                <img src="{{ dated_url_for('images/primeAccess-bleu.png') }}" alt="Prime Access" class="landing-brand__logo" width="180" height="40" decoding="async">
             </a>
             <ul class="landing-nav__links" id="landingNavLinks">
                 <li><a href="#fonctionnalites">Fonctionnalités</a></li>
@@ -480,23 +483,51 @@
     <!-- ================= FOOTER ================= -->
     <footer class="landing-footer">
         <div class="landing-shell">
-            <div class="landing-footer__top">
-                <div>
-                    <a class="landing-brand" href="#top">
-                        <i class="bi bi-qr-code-scan" aria-hidden="true"></i> Prime Access
-                    </a>
-                    <p class="landing-footer__tagline">Tickets &amp; QR codes pour tout commerce.</p>
-                </div>
-                <ul class="landing-footer__links">
-                    <li><a href="#fonctionnalites">Fonctionnalités</a></li>
-                    <li><a href="#tarifs">Tarifs</a></li>
-                    <li><a href="#faq">FAQ</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
+            <div class="landing-footer__bar" aria-hidden="true"></div>
+
+            <div class="landing-footer__brand">
+                <a href="#top" aria-label="Prime Access — retour en haut">
+                    <img src="{{ dated_url_for('images/primeAccess-bleu.png') }}" alt="Prime Access" class="landing-footer__logo" width="440" height="98" loading="lazy" decoding="async">
+                </a>
+                <p class="landing-footer__tagline">Le comptoir qui imprime ses reçus et compte sa caisse, sans tableur ni paperasse.</p>
             </div>
+
+            <div class="landing-footer__grid" id="landingFooterGrid">
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                    <h3 class="landing-footer__title">Le produit</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="#fonctionnalites">Ce que fait l’app</a></li>
+                        <li><a href="#comment-ca-marche">Prise en main</a></li>
+                        <li><a href="#tarifs">Formules</a></li>
+                    </ul>
+                </div>
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-person-badge"></i></span>
+                    <h3 class="landing-footer__title">Votre compte</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="{{ url_for('login') }}">Se connecter</a></li>
+                        <li><a href="{{ url_for('login') }}">Ouvrir un compte</a></li>
+                        <li><a href="#faq">Questions fréquentes</a></li>
+                    </ul>
+                </div>
+                <div class="landing-footer__col">
+                    <span class="landing-footer__icon" aria-hidden="true"><i class="bi bi-headset"></i></span>
+                    <h3 class="landing-footer__title">Nous joindre</h3>
+                    <ul class="landing-footer__list">
+                        <li><a href="https://wa.me/221771004908" target="_blank" rel="noopener"><i class="bi bi-whatsapp" aria-hidden="true"></i>WhatsApp</a></li>
+                        <li><a href="tel:+221771004908"><i class="bi bi-telephone-fill" aria-hidden="true"></i>+221 77 100 49 08</a></li>
+                        <li><a href="mailto:contact@primeaccess.com"><i class="bi bi-envelope-fill" aria-hidden="true"></i>contact@primeaccess.com</a></li>
+                    </ul>
+                </div>
+            </div>
+
             <div class="landing-footer__bottom">
-                <span>&copy; <span id="landingYear"></span> Prime Access. Tous droits réservés.</span>
-                <span>Dakar, Sénégal</span>
+                <span>&copy; <span id="landingYear"></span> Prime Access — Conçu à Dakar, Sénégal.</span>
+                <ul class="landing-footer__meta">
+                    <li><a href="#contact">Écrire au support</a></li>
+                    <li><a class="landing-footer__totop" href="#top" aria-label="Revenir en haut de page"><i class="bi bi-arrow-up" aria-hidden="true"></i></a></li>
+                </ul>
             </div>
         </div>
     </footer>

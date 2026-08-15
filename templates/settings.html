@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Paramètres — Prime Access</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -27,7 +30,7 @@
                 <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
                 {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
                 {% else %}
-                <i class="bi bi-qr-code-scan"></i> Prime Access
+                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar">
                 {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavSettings">
@@ -261,7 +264,7 @@
                                 <input type="color" class="form-control form-control-color brand-color-input" id="brand_primary_color" name="primary_color" value="{{ brand_primary_color }}" title="Choisir une couleur">
                                 <input type="text" class="form-control brand-color-hex" id="brand_primary_color_hex" value="{{ brand_primary_color }}" maxlength="7" autocomplete="off" spellcheck="false" aria-label="Code couleur hexadécimal">
                             </div>
-                            {% set brand_color_presets = ['#1a2745', '#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#212529'] %}
+                            {% set brand_color_presets = ['#4d81c2', '#161c33', '#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#212529'] %}
                             <div class="d-flex flex-wrap gap-2 brand-color-presets" role="group" aria-label="Couleurs prédéfinies">
                                 {% for preset in brand_color_presets %}
                                 <button type="button" class="brand-color-swatch brand-primary-swatch" style="background-color: {{ preset }};" data-color="{{ preset }}" title="{{ preset }}" aria-label="Choisir la couleur {{ preset }}"></button>

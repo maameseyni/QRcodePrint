@@ -27,6 +27,7 @@ from flask import (
     request,
     jsonify,
     send_file,
+    send_from_directory,
     abort,
     session,
     redirect,
@@ -728,8 +729,8 @@ def _probe_printer_status():
 
 PAYMENT_MODES = frozenset({'especes', 'orange_money', 'wave'})
 
-# Personnalisation (couleur + logo) : valeur par défaut = couleur historique de l'app.
-BRAND_DEFAULT_PRIMARY_COLOR = '#1a2745'
+# Personnalisation (couleur + logo) : valeur par défaut = bleu du logo Prime Access.
+BRAND_DEFAULT_PRIMARY_COLOR = '#4d81c2'
 BRAND_LOGO_MAX_DIM = 320
 BRAND_LOGO_MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 _HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
@@ -783,7 +784,7 @@ def _hex_to_rgb_triplet(hex_color: str) -> str:
     try:
         r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
     except (ValueError, IndexError):
-        return '26, 39, 69'
+        return '77, 129, 194'
     return f'{r}, {g}, {b}'
 
 
@@ -2242,6 +2243,16 @@ def settings():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+
+@app.route('/favicon.ico')
+def favicon():
+    """Icône d’onglet demandée automatiquement par les navigateurs."""
+    return send_from_directory(
+        os.path.join(app.static_folder, 'images'),
+        'favicon.png',
+        mimetype='image/png',
+    )
 
 
 @app.route('/')

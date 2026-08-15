@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Tickets — Prime Access</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -31,7 +34,7 @@
                 <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
                 {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
                 {% else %}
-                <i class="bi bi-qr-code-scan"></i> Prime Access
+                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar">
                 {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
