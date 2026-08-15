@@ -60,7 +60,14 @@ body.landing-page::before {
 }
 
 .landing-page a,
+.login-page a,
 .landing-nav a {
+    text-decoration: none;
+}
+
+.landing-page a:hover,
+.login-page a:hover,
+.landing-nav a:hover {
     text-decoration: none;
 }
 

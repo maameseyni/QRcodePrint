@@ -2431,9 +2431,34 @@ body.login-page::before {
     padding-block: clamp(2.25rem, 4vw, 3.25rem) 1rem;
 }
 
+/* Même gabarit de menu que la landing (évite un rendu plus haut via line-height Bootstrap). */
 .login-page .landing-nav {
-    margin-top: clamp(1.1rem, 2.4vw, 1.75rem);
-    top: clamp(1.1rem, 2.4vw, 1.75rem);
+    margin-top: clamp(0.65rem, 1.6vw, 1.1rem);
+    top: clamp(0.65rem, 1.6vw, 1.1rem);
+}
+
+.login-page .landing-nav__inner {
+    padding: 0.72rem 0.9rem 0.72rem 1.75rem;
+}
+
+.login-page .landing-brand__logo {
+    height: 2.45rem;
+    max-width: min(200px, 46vw);
+}
+
+.login-page .landing-nav__links a,
+.login-page .landing-nav__cta {
+    font-size: 1.02rem;
+    line-height: 1.25;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+}
+
+.login-page .landing-nav__links a {
+    padding: 0.6rem 1.1rem;
+}
+
+.login-page .landing-nav__cta {
+    padding: 0.7rem 1.45rem;
 }
 
 .login-page .landing-footer__bar {
