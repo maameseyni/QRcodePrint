@@ -69,6 +69,7 @@ def test_create_qr_requires_subscription(mock_user, client, auth_session):
     assert rv.status_code == 400
 
 
+@patch("app.store.find_latest_qr_by_client_phone", return_value=None)
 @patch("app.store.allocate_ticket_number", return_value="000042")
 @patch("app.store.qr_hash_exists", return_value=False)
 @patch("app.store.create_qr")
@@ -82,6 +83,7 @@ def test_create_qr_success_minimal(
     mock_create,
     mock_hash,
     mock_ticket,
+    _find,
     client,
     auth_session,
 ):
@@ -117,6 +119,47 @@ def test_create_qr_success_minimal(
     call_kw = mock_create.call_args[0][0]
     assert call_kw.get("created_by_user_id") == "owner-1"
     assert call_kw.get("created_by_display") == "Salle"
+
+
+@patch("app.store.create_qr")
+@patch("app.store.find_latest_qr_by_client_phone")
+@patch("app._current_user")
+def test_create_qr_rejects_existing_phone(mock_user, mock_find, mock_create, client, auth_session):
+    mock_user.return_value = {
+        "id": "owner-1",
+        "role": "user",
+        "gym_name": "Salle",
+        "phone": "+221771234567",
+        "address": "X",
+        "is_active": True,
+    }
+    mock_find.return_value = {
+        "id": "existing-qr",
+        "ticket_number": "000007",
+        "expiration_date": "2099-01-01T12:00:00",
+        "client_phone": "+221771234567",
+    }
+    rv = client.post(
+        "/api/create_qr",
+        json={
+            "client_name": "Test Client",
+            "client_phone": "+221771234567",
+            "subscription_type": "Séance",
+            "payment_mode": "especes",
+            "amount_total": "100",
+            "amount_paid": "50",
+            "expiration": "24h",
+        },
+        headers={"Content-Type": "application/json"},
+    )
+    assert rv.status_code == 409
+    body = rv.get_json()
+    assert body.get("success") is False
+    assert body.get("code") == "phone_already_has_ticket"
+    assert body.get("is_expired") is False
+    assert "771234567" in (body.get("tickets_url") or "")
+    assert "existing=1" in (body.get("tickets_url") or "")
+    mock_create.assert_not_called()
 
 
 @patch("app._current_user")

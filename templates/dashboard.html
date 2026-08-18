@@ -30,7 +30,7 @@
                 <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
                 {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
                 {% else %}
-                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar">
+                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar brand-logo-navbar--default">
                 {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavOwnerDash">
@@ -38,9 +38,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNavOwnerDash">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house-door nav-link-icon" aria-hidden="true"></i>Accueil</a>
-                    </li>
                     <li class="nav-item">
                         <a class="nav-link active" href="{{ url_for('dashboard') }}" aria-current="page"><i class="bi bi-speedometer2 nav-link-icon" aria-hidden="true"></i>Dashboard</a>
                     </li>

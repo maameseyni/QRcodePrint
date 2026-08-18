@@ -264,6 +264,41 @@ class FirestoreDataStore:
             return True
         return False
 
+    def find_latest_qr_by_client_phone(
+        self, owner_id: str, client_phone: str
+    ) -> Optional[Dict[str, Any]]:
+        """Dernier ticket du propriétaire pour ce numéro (normalisé, ex. +22177…)."""
+        oid = str(owner_id or "").strip()
+        phone = str(client_phone or "").strip()
+        if not oid or not phone:
+            return None
+
+        rows: List[Dict[str, Any]] = []
+        try:
+            q = self._col("qr_codes")
+            q = q.where(filter=FieldFilter("owner_id", "==", oid))
+            q = q.where(filter=FieldFilter("client_phone", "==", phone))
+            q = q.limit(25)
+            for doc in q.stream():
+                item = doc.to_dict() or {}
+                item.setdefault("id", doc.id)
+                rows.append(item)
+        except Exception as e:
+            logger.warning("find_latest_qr_by_client_phone requête directe impossible: %s", e)
+            try:
+                cap = int(self.config.get("LIST_QR_FETCH_MAX") or 3000)
+            except (TypeError, ValueError):
+                cap = 3000
+            rows = [
+                r
+                for r in self._fetch_rows_all(oid, max(cap, 1))
+                if str(r.get("client_phone") or "").strip() == phone
+            ]
+
+        if not rows:
+            return None
+        return self._sort_rows_by_created_at_desc(rows)[0]
+
     def create_qr(self, qr_record: Dict[str, Any]):
         record = dict(qr_record)
         record.setdefault("created_at", datetime.utcnow().isoformat())
@@ -425,13 +460,14 @@ class FirestoreDataStore:
                 if not tn_low.startswith('#'):
                     ticket_hay_parts.append('#' + tn_low)
 
+            phone_raw = str(row.get("client_phone") or "")
             haystack = " ".join(
                 [
                     str(row.get("client_name") or ""),
                     str(row.get("client_firstname") or ""),
                     str(row.get("client_email") or ""),
                     str(row.get("client_address") or ""),
-                    str(row.get("client_phone") or ""),
+                    phone_raw,
                     str(row.get("subscription_type") or ""),
                     str(row.get("service") or ""),
                     str(row.get("payment_mode") or ""),
@@ -439,7 +475,10 @@ class FirestoreDataStore:
                 ]
             ).lower()
             if search_l and search_l not in haystack:
-                continue
+                search_digits = "".join(c for c in search_l if c.isdigit())
+                phone_digits = "".join(c for c in phone_raw if c.isdigit())
+                if not (len(search_digits) >= 8 and search_digits in phone_digits):
+                    continue
 
             ticket_val = str(row.get("ticket_number") or "").lower()
             if ticket_l and ticket_l not in ticket_val:

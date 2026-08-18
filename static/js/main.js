@@ -456,6 +456,20 @@ async function handleFormSubmit(e) {
 
         const data = await response.json().catch(() => ({}));
 
+        if (data.code === 'phone_already_has_ticket' && data.tickets_url) {
+            window.location.assign(data.tickets_url);
+            return;
+        }
+
+        if (data.code === 'phone_already_has_ticket') {
+            showToast(
+                'Ticket déjà existant',
+                data.error || 'Ce numéro a déjà un ticket. Consultez la liste des tickets.',
+                'warning'
+            );
+            return;
+        }
+
         if (!response.ok) {
             const msg = data.error || `Erreur serveur (${response.status})`;
             showToast('Erreur', msg, 'danger');

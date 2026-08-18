@@ -28,6 +28,34 @@
         if (el) el.textContent = String(new Date().getFullYear());
     }
 
+    function setupEphemeralAlerts() {
+        var alerts = document.querySelectorAll('.js-flash-alert');
+        if (!alerts.length) return;
+        try {
+            var url = new URL(window.location.href);
+            var changed = false;
+            ['contact_sent', 'contact_error'].forEach(function (k) {
+                if (url.searchParams.has(k)) {
+                    url.searchParams.delete(k);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+            }
+        } catch (err) {}
+        var hold = REDUCE_MOTION ? 2800 : 4200;
+        window.setTimeout(function () {
+            alerts.forEach(function (el) {
+                el.style.maxHeight = el.offsetHeight + 'px';
+                el.classList.add('is-leaving');
+                window.setTimeout(function () {
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                }, REDUCE_MOTION ? 200 : 420);
+            });
+        }, hold);
+    }
+
     function setupContactFormState() {
         var form = document.getElementById('landingContactForm');
         var btn = document.getElementById('landingContactSubmit');
@@ -138,6 +166,7 @@
         setupSmoothScroll();
         setupFooterYear();
         setupContactFormState();
+        setupEphemeralAlerts();
         setupHeroEntrance();
         setupTicketFloat();
         setupCardSpotlight();

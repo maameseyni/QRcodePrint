@@ -258,7 +258,33 @@ async function downloadExport(format) {
     }
 }
 
+function applyTicketsFiltersFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const search = (params.get('search') || '').trim();
+    const searchInput = document.getElementById('searchInput');
+    if (search && searchInput) {
+        searchInput.value = search;
+    }
+    return params;
+}
+
+function notifyExistingTicketFromUrl(params) {
+    if (!params || params.get('existing') !== '1') return;
+    const expired = params.get('expired') === '1';
+    const msg = expired
+        ? 'Ce numéro a déjà un ticket, maintenant expiré. Prolongez la période, ou imprimez / téléchargez-le à nouveau.'
+        : 'Ce numéro a déjà un ticket encore valable. Imprimez-le, téléchargez-le, ou prolongez la période plutôt que d’en créer un autre.';
+    showToast('Ticket déjà existant', msg, 'warning', 12000);
+    params.delete('existing');
+    params.delete('expired');
+    const qs = params.toString();
+    const next = window.location.pathname + (qs ? '?' + qs : '');
+    history.replaceState({}, '', next);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = applyTicketsFiltersFromUrl();
+    notifyExistingTicketFromUrl(urlParams);
     loadQRCodes();
 
     const createQrLink = document.getElementById('ticketsCreateQrLink');
@@ -1083,7 +1109,7 @@ async function confirmDelete() {
     }
 }
 
-function showToast(title, message, type = 'info') {
+function showToast(title, message, type = 'info', delayMs = 5000) {
     const toast = document.getElementById('toast');
     const toastTitle = document.getElementById('toastTitle');
     const toastBody = document.getElementById('toastBody');
@@ -1102,6 +1128,7 @@ function showToast(title, message, type = 'info') {
     toastTitle.textContent = title;
     toastBody.textContent = message;
 
-    const bsToast = new bootstrap.Toast(toast);
+    const delay = Number.isFinite(Number(delayMs)) ? Math.max(2000, Number(delayMs)) : 5000;
+    const bsToast = new bootstrap.Toast(toast, { delay });
     bsToast.show();
 }

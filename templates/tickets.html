@@ -34,7 +34,7 @@
                 <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
                 {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
                 {% else %}
-                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar">
+                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar brand-logo-navbar--default">
                 {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -42,9 +42,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house-door nav-link-icon" aria-hidden="true"></i>Accueil</a>
-                    </li>
                     {% if can_manage_settings %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2 nav-link-icon" aria-hidden="true"></i>Dashboard</a>
@@ -323,16 +320,24 @@
     </div>
 
     <!-- Modal : prolonger un ticket expiré (même document, nouveau QR / date) -->
-    <div class="modal fade" id="extendQrModal" tabindex="-1" aria-labelledby="extendQrModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+    <div class="modal fade app-modal app-modal--wide" id="extendQrModal" tabindex="-1" aria-labelledby="extendQrModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="extendQrModalLabel">Prolonger le ticket</h5>
+                    <div class="app-modal-head">
+                        <span class="app-modal-icon app-modal-icon--clock" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+                        <div class="app-modal-heading">
+                            <h2 class="modal-title" id="extendQrModalLabel">Prolonger le ticket</h2>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="extendQrIdField" value="">
-                    <p class="small text-muted mb-3">Le même numéro de ticket est conservé. Une nouvelle expiration est calculée <strong>à partir de maintenant</strong> ; le QR sur le ticket change — pensez à <strong>réimprimer</strong>.</p>
+                    <div class="app-modal-notice">
+                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                        <p>Le même numéro de ticket est conservé. Une nouvelle expiration est calculée <strong>à partir de maintenant</strong> ; le QR change — pensez à <strong>réimprimer</strong>.</p>
+                    </div>
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label for="extendQrAmountTotal" class="form-label">Montant dû <span class="text-danger">*</span></label>
@@ -365,7 +370,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="button" class="btn btn-primary" id="extendQrSubmitBtn">Prolonger</button>
                 </div>
             </div>
@@ -373,18 +378,26 @@
     </div>
 
     <!-- Modal pour confirmation de suppression -->
-    <div class="modal fade" id="deleteModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade app-modal" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Confirmer la suppression</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="app-modal-head">
+                        <span class="app-modal-icon app-modal-icon--danger" aria-hidden="true"><i class="bi bi-trash3"></i></span>
+                        <div class="app-modal-heading">
+                            <h2 class="modal-title" id="deleteModalLabel">Supprimer le ticket</h2>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Êtes-vous sûr de vouloir supprimer ce QR Code ? Cette action est irréversible.</p>
+                    <div class="app-modal-notice app-modal-notice--danger">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <p>Cette action est irréversible. Le QR Code et son historique ne pourront plus être récupérés.</p>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Supprimer</button>
                 </div>
             </div>

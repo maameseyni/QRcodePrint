@@ -30,7 +30,7 @@
                 <img src="{{ brand_logo_url }}" alt="Logo" class="brand-logo-navbar">
                 {% if current_gym_name %}<span class="brand-gym-name">{{ current_gym_name }}</span>{% endif %}
                 {% else %}
-                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar">
+                <img src="{{ url_for('static', filename='images/primeAccess-bleu.png') }}" alt="Prime Access" class="brand-logo-navbar brand-logo-navbar--default">
                 {% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavSettings">
@@ -38,9 +38,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNavSettings">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house-door nav-link-icon" aria-hidden="true"></i>Accueil</a>
-                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('tickets') }}"><i class="bi bi-receipt nav-link-icon" aria-hidden="true"></i>Tickets</a>
                     </li>
@@ -72,7 +69,7 @@
         </div>
 
         {% if request.args.get('cashier_created') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-person-plus me-1" aria-hidden="true"></i>
             {% set _cu = request.args.get('cashier_username') or '' %}
             {% set _dn = request.args.get('cashier_display_name') or '' %}
@@ -86,12 +83,12 @@
         </div>
         {% endif %}
         {% if request.args.get('cashier_deleted') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-person-x me-1" aria-hidden="true"></i>Compte caissier supprimé.
         </div>
         {% endif %}
         {% if request.args.get('cashier_password_reset') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-key me-1" aria-hidden="true"></i>
             {% set _ru = request.args.get('cashier_username') or '' %}
             {% if _ru.strip() %}
@@ -102,7 +99,7 @@
         </div>
         {% endif %}
         {% if request.args.get('cashier_access_updated') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-person-lock me-1" aria-hidden="true"></i>
             {% if request.args.get('active') == '1' %}
             Accès réactivé : le caissier peut à nouveau se connecter.
@@ -112,37 +109,37 @@
         </div>
         {% endif %}
         {% if request.args.get('cashier_export_updated') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-file-earmark-spreadsheet me-1" aria-hidden="true"></i>Paramètre d’export de la liste des tickets mis à jour pour le caissier.
         </div>
         {% endif %}
         {% if request.args.get('updated') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Modifications enregistrées.
         </div>
         {% endif %}
         {% if request.args.get('branding_updated') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-palette me-1" aria-hidden="true"></i>Apparence mise à jour.
         </div>
         {% endif %}
         {% if request.args.get('branding_reset') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Couleur réinitialisée.
         </div>
         {% endif %}
         {% if request.args.get('bg_reset') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Fond de page réinitialisé.
         </div>
         {% endif %}
         {% if request.args.get('text_reset') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Couleur du texte réinitialisée.
         </div>
         {% endif %}
         {% if request.args.get('branding_all_reset') %}
-        <div class="alert alert-success py-2 small mb-4" role="alert">
+        <div class="alert alert-success py-2 small mb-4 js-flash-alert" role="status">
             <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Fond et textes sur le fond réinitialisés. Menu, couleur principale et logo inchangés.
         </div>
         {% endif %}
@@ -493,85 +490,6 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="modal fade" id="cashierResetPwModal" tabindex="-1" aria-labelledby="cashierResetPwModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form method="post" action="{{ url_for('settings') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="reset_cashier_password">
-                                <input type="hidden" name="cashier_id" id="modal_reset_cashier_id" value="">
-                                <div class="modal-header">
-                                    <h2 class="modal-title h5" id="cashierResetPwModalLabel">
-                                        Nouveau mot de passe
-                                        <span class="text-body-secondary fw-normal">—</span>
-                                        <span id="cashierResetPwTitleUser" class="font-monospace"></span>
-                                    </h2>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <p class="small text-muted mb-3">Le caissier pourra se connecter avec ce nouveau mot de passe ; l’ancien ne sera plus valide. <strong class="text-body">Il sera déconnecté sur tous les appareils</strong> où une session était encore ouverte.</p>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="modal_reset_password">Mot de passe</label>
-                                        <input type="password" class="form-control" id="modal_reset_password" name="reset_password" minlength="8" autocomplete="new-password" required>
-                                    </div>
-                                    <div class="mb-0">
-                                        <label class="form-label" for="modal_reset_password_confirm">Confirmation</label>
-                                        <input type="password" class="form-control" id="modal_reset_password_confirm" name="reset_password_confirm" minlength="8" autocomplete="new-password" required>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
-                                    <button type="submit" class="btn btn-primary">Enregistrer</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal fade" id="cashierDeleteConfirmModal" tabindex="-1" aria-labelledby="cashierDeleteConfirmModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form method="post" action="{{ url_for('settings') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="delete_cashier">
-                                <input type="hidden" name="cashier_id" id="modal_delete_cashier_id" value="">
-                                <div class="modal-header border-0 pb-0">
-                                    <h2 class="modal-title h5" id="cashierDeleteConfirmModalLabel">Supprimer le caissier</h2>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                                </div>
-                                <div class="modal-body pt-2">
-                                    <p class="mb-2 small">Voulez-vous supprimer définitivement le compte <strong id="cashierDeleteConfirmName" class="font-monospace"></strong>&nbsp;? Cette action est irréversible.</p>
-                                    <p class="mb-0 small text-muted">Les tickets QR déjà créés par ce caissier <strong>ne sont pas supprimés</strong> : ils restent ceux de votre salle. La colonne <strong>Auteur</strong> continue d’afficher le nom enregistré au moment de la création de chaque ticket.</p>
-                                </div>
-                                <div class="modal-footer border-0 pt-0">
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
-                                    <button type="submit" class="btn btn-danger">Supprimer</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal fade" id="cashierDeactivateConfirmModal" tabindex="-1" aria-labelledby="cashierDeactivateConfirmModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form method="post" action="{{ url_for('settings') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="toggle_cashier_active">
-                                <input type="hidden" name="cashier_id" id="modal_deactivate_cashier_id" value="">
-                                <div class="modal-header border-0 pb-0">
-                                    <h2 class="modal-title h5" id="cashierDeactivateConfirmModalLabel">Désactiver l’accès</h2>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                                </div>
-                                <div class="modal-body pt-2">
-                                    <p class="mb-0 small">Désactiver l’accès pour <strong id="cashierDeactivateConfirmName" class="font-monospace"></strong>&nbsp;? Le caissier ne pourra plus se connecter tant que vous ne réactiverez pas son compte.</p>
-                                </div>
-                                <div class="modal-footer border-0 pt-0">
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
-                                    <button type="submit" class="btn btn-warning">Désactiver l’accès</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
                 {% else %}
                 <p class="small text-muted mb-0">Aucun caissier pour l’instant.</p>
                 {% endif %}
@@ -580,6 +498,109 @@
         {% endif %}
 
     </div>
+    {% if cashiers %}
+    <div class="modal fade app-modal" id="cashierResetPwModal" tabindex="-1" aria-labelledby="cashierResetPwModalLabel" aria-hidden="true" data-bs-focus="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="{{ url_for('settings') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="reset_cashier_password">
+                    <input type="hidden" name="cashier_id" id="modal_reset_cashier_id" value="">
+                    <div class="modal-header">
+                        <div class="app-modal-head">
+                            <span class="app-modal-icon app-modal-icon--key" aria-hidden="true"><i class="bi bi-key"></i></span>
+                            <div class="app-modal-heading">
+                                <h2 class="modal-title" id="cashierResetPwModalLabel">Nouveau mot de passe</h2>
+                                <span id="cashierResetPwTitleUser" class="app-modal-chip"></span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="app-modal-notice">
+                            <i class="bi bi-info-circle" aria-hidden="true"></i>
+                            <p>L’ancien mot de passe ne sera plus valide. <strong>Il sera déconnecté sur tous les appareils.</strong></p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="modal_reset_password">Mot de passe</label>
+                            <input type="password" class="form-control" id="modal_reset_password" name="reset_password" minlength="8" autocomplete="new-password" required>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="modal_reset_password_confirm">Confirmation</label>
+                            <input type="password" class="form-control" id="modal_reset_password_confirm" name="reset_password_confirm" minlength="8" autocomplete="new-password" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade app-modal" id="cashierDeleteConfirmModal" tabindex="-1" aria-labelledby="cashierDeleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="{{ url_for('settings') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete_cashier">
+                    <input type="hidden" name="cashier_id" id="modal_delete_cashier_id" value="">
+                    <div class="modal-header">
+                        <div class="app-modal-head">
+                            <span class="app-modal-icon app-modal-icon--danger" aria-hidden="true"><i class="bi bi-trash3"></i></span>
+                            <div class="app-modal-heading">
+                                <h2 class="modal-title" id="cashierDeleteConfirmModalLabel">Supprimer le caissier</h2>
+                                <span id="cashierDeleteConfirmName" class="app-modal-chip"></span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="app-modal-notice app-modal-notice--danger">
+                            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                            <p>Cette action est irréversible. Les tickets déjà créés par ce caissier <strong>ne sont pas supprimés</strong> : la colonne Auteur conserve le nom enregistré à la création.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-danger">Supprimer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade app-modal" id="cashierDeactivateConfirmModal" tabindex="-1" aria-labelledby="cashierDeactivateConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="{{ url_for('settings') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="toggle_cashier_active">
+                    <input type="hidden" name="cashier_id" id="modal_deactivate_cashier_id" value="">
+                    <div class="modal-header">
+                        <div class="app-modal-head">
+                            <span class="app-modal-icon app-modal-icon--warning" aria-hidden="true"><i class="bi bi-pause-circle"></i></span>
+                            <div class="app-modal-heading">
+                                <h2 class="modal-title" id="cashierDeactivateConfirmModalLabel">Désactiver l’accès</h2>
+                                <span id="cashierDeactivateConfirmName" class="app-modal-chip"></span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="app-modal-notice app-modal-notice--warning">
+                            <i class="bi bi-info-circle" aria-hidden="true"></i>
+                            <p>Le caissier ne pourra plus se connecter tant que vous ne réactiverez pas son compte.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-warning">Désactiver l’accès</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     <div class="toast-container position-fixed bottom-0 end-0 p-3">
         <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
@@ -599,7 +620,7 @@
     (function () {
         function toastErr(msg) {
             if (typeof showAppToast === 'function') {
-                showAppToast('Erreur', msg, 'warning');
+                showAppToast('Erreur', msg, 'danger');
             } else {
                 window.alert(msg);
             }
@@ -615,6 +636,42 @@
             } catch (e) {}
             flash.remove();
         }
+
+        (function dismissFlashAlerts() {
+            var alerts = document.querySelectorAll('.js-flash-alert');
+            if (!alerts.length) return;
+            var keys = [
+                'cashier_created', 'cashier_username', 'cashier_display_name',
+                'cashier_deleted', 'cashier_password_reset', 'cashier_access_updated',
+                'cashier_export_updated', 'active', 'updated', 'branding_updated',
+                'branding_reset', 'bg_reset', 'text_reset', 'branding_all_reset'
+            ];
+            try {
+                var url = new URL(window.location.href);
+                var changed = false;
+                keys.forEach(function (k) {
+                    if (url.searchParams.has(k)) {
+                        url.searchParams.delete(k);
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+                }
+            } catch (err) {}
+            var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var hold = reduce ? 2800 : 4200;
+            window.setTimeout(function () {
+                alerts.forEach(function (el) {
+                    el.style.maxHeight = el.offsetHeight + 'px';
+                    el.classList.add('is-leaving');
+                    window.setTimeout(function () {
+                        if (el.parentNode) el.parentNode.removeChild(el);
+                    }, reduce ? 200 : 420);
+                });
+            }, hold);
+        })();
+
         var form = document.querySelector('.neumo-settings-form');
         if (!form) return;
         form.addEventListener('submit', function (ev) {
@@ -669,6 +726,12 @@
                 var title = document.getElementById('cashierResetPwTitleUser');
                 if (hid) hid.value = id;
                 if (title) title.textContent = name;
+            });
+            modalEl.addEventListener('shown.bs.modal', function () {
+                var p1 = document.getElementById('modal_reset_password');
+                if (p1 && typeof p1.focus === 'function') {
+                    p1.focus({ preventScroll: true });
+                }
             });
             modalEl.addEventListener('hidden.bs.modal', function () {
                 var p1 = document.getElementById('modal_reset_password');

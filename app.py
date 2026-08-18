@@ -272,6 +272,33 @@ def _current_owner_id():
     return str(session.get('owner_id') or session.get('user_id') or '')
 
 
+def _branding_source_user(user):
+    """
+    Document dont proviennent couleur, logo et fond personnalisés.
+    Un caissier hérite de la personnalisation du propriétaire de sa salle (owner_id).
+    """
+    if not user:
+        return None
+    uid = str(user.get('id') or '').strip()
+    owner_id = str(user.get('owner_id') or '').strip()
+    role = str(user.get('role') or '').strip().lower()
+    if role == 'cashier' and owner_id and owner_id != uid:
+        if hasattr(g, '_qrprint_branding_owner'):
+            return g._qrprint_branding_owner
+        owner = None
+        try:
+            owner = store.get_user_by_id(owner_id)
+        except GoogleAPICallError as e:
+            app.logger.warning(
+                "Firestore: lecture branding propriétaire %s impossible: %s",
+                owner_id,
+                e,
+            )
+        g._qrprint_branding_owner = owner if owner else user
+        return g._qrprint_branding_owner
+    return user
+
+
 def _user_can_export_tickets(user) -> bool:
     """Export CSV/Excel depuis la liste des tickets : autorisé pour tous sauf caissiers avec allow_export désactivé."""
     if not user:
@@ -507,13 +534,14 @@ def inject_static_url():
 def inject_session():
     sa = site_auth_required()
     u = _current_user()
-    brand_primary = str((u or {}).get('brand_primary_color') or '').strip().lower()
+    brand_src = _branding_source_user(u) or {}
+    brand_primary = str(brand_src.get('brand_primary_color') or '').strip().lower()
     if not _is_valid_hex_color(brand_primary):
         brand_primary = BRAND_DEFAULT_PRIMARY_COLOR
-    brand_bg_color = str((u or {}).get('brand_bg_color') or '').strip().lower()
+    brand_bg_color = str(brand_src.get('brand_bg_color') or '').strip().lower()
     if not _is_valid_hex_color(brand_bg_color):
         brand_bg_color = ''
-    brand_text_color = str((u or {}).get('brand_text_color') or '').strip().lower()
+    brand_text_color = str(brand_src.get('brand_text_color') or '').strip().lower()
     if not _is_valid_hex_color(brand_text_color):
         brand_text_color = ''
     return {
@@ -533,7 +561,7 @@ def inject_session():
         'brand_primary_color_dark': _darken_hex(brand_primary, 0.82),
         'brand_primary_color_darker': _darken_hex(brand_primary, 0.62),
         'brand_primary_color_rgb': _hex_to_rgb_triplet(brand_primary),
-        'brand_logo_url': str((u or {}).get('brand_logo_data_uri') or '').strip(),
+        'brand_logo_url': str(brand_src.get('brand_logo_data_uri') or '').strip(),
         'brand_bg_color': brand_bg_color,
         'brand_bg_gradient': _page_background_gradient(brand_bg_color) if brand_bg_color else '',
         'brand_text_color': brand_text_color,
@@ -2426,6 +2454,34 @@ def create_qr():
         owner_id = _current_owner_id()
         if not owner_id:
             return jsonify({'success': False, 'error': 'Session invalide, reconnectez-vous.'}), 401
+
+        existing = store.find_latest_qr_by_client_phone(owner_id, client_phone)
+        if existing:
+            exp_raw = str(existing.get('expiration_date') or '')
+            try:
+                is_expired = datetime.now() > datetime.fromisoformat(exp_raw)
+            except ValueError:
+                is_expired = True
+            search_q = sn_phone_local_display(client_phone) or client_phone
+            payload = {
+                'success': False,
+                'code': 'phone_already_has_ticket',
+                'error': (
+                    'Ce numéro a déjà un ticket. S’il est expiré, prolongez la période ; '
+                    'sinon imprimez-le, téléchargez-le, ou prolongez-le plutôt que d’en créer un autre.'
+                ),
+                'is_expired': is_expired,
+                'ticket_number': str(existing.get('ticket_number') or ''),
+            }
+            role = str((_current_user() or {}).get('role') or '').strip().lower()
+            if role != 'operator':
+                payload['tickets_url'] = url_for(
+                    'tickets',
+                    search=search_q,
+                    existing='1',
+                    expired='1' if is_expired else '0',
+                )
+            return jsonify(payload), 409
 
         try:
             ticket_number = store.allocate_ticket_number(owner_id)

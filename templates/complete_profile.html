@@ -18,7 +18,7 @@
             <h1 class="neumo-title">Compléter le profil</h1>
             <p class="neumo-subtitle">Ces informations sont nécessaires pour activer le compte structure.</p>
             {% if error %}
-            <div class="alert alert-danger py-2 small" role="alert">{{ error }}</div>
+            <div class="alert alert-danger py-2 small" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>{{ error }}</div>
             {% endif %}
             <form method="post" action="{{ url_for('complete_profile') }}" class="neumo-form neumo-complete-profile-form text-start">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
